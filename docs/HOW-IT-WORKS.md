@@ -100,12 +100,13 @@ Two ways to feed it:
 
 | Command | Does |
 |---|---|
-| `start [-Quiet]` | start pxpipe and warpd if not listening (what the SessionStart hook calls) |
-| `stop` / `restart` | stop / restart both |
+| `start [-Quiet]` | start pxpipe, warpd and the monitor if not listening (what the SessionStart hook calls; the monitor is best-effort) |
+| `stop` / `restart` | stop / restart all three |
 | `status` | daemons, PIDs, dashboard URL, always-on state, savings (24h / 7d / all-time from `events.jsonl` + `rtk gain`), autostart state |
 | `doctor [-Fix]` | checks node/rtk/pxpipe/warpd/hook/rules/CA/settings; `-Fix` applies safe repairs (start daemons, re-run desktop-on, `rtk init -g`) |
 | `desktop-on` / `desktop-off` | write / remove the env block + SessionStart hook in settings.json (UTF-8, no BOM, backup kept) |
-| `dashboard` | open http://127.0.0.1:47821/ |
+| `dashboard` | open http://127.0.0.1:47821/ (pxpipe's own page) |
+| `monitor [open|stop]` | the all-in-one page on http://127.0.0.1:47823/ (section 7) |
 | `logs [-All]` | tail `proxy.log` + warpd logs; logs rotate on every start (`.1 .2 .3` kept) |
 | `clean [-All]` | drop rotated logs, trim `events.jsonl` to 30 days (`-All`: delete it), clear >5 MB logs while stopped |
 | `update` | `npm i -g pxpipe-proxy@latest` + `winget upgrade rtk-ai.rtk`, then restart |
@@ -114,15 +115,36 @@ Two ways to feed it:
 
 warpd itself (`stack/bin/lib/warpd/warpd.ts`) supervises pxpipe: if `/healthz` on 47821 stops answering it restarts pxpipe with backoff (1 s -> 30 s) and, while pxpipe is down, forwards `/v1/messages` straight to `api.anthropic.com` uncompressed rather than failing the request. `PXPIPE_WARP_PORT`, `PXPIPE_PORT`, `PXPIPE_CLI`, `PXPIPE_LOG_OUT/ERR` are the knobs.
 
-## 7. Numbers from this box
+## 7. The monitor (:47823)
+
+`stack/bin/lib/monitor.js`, plain Node, no dependencies, one page, refreshes every 5 s. It exists to answer the question the three separate dashboards can't: *is each layer actually paying for itself right now?*
+
+What it reads:
+
+- pxpipe `/stats` and `~/.pxpipe/events.jsonl` (the last 8 MB) for per-request `baseline_tokens` vs `actual_tokens`, images sent, transform ms, reason
+- warpd `/healthz` (mode divert/passthrough, supervisor restarts, uptime)
+- `rtk gain --json` + `~/.claude/settings.json` (hook present?) for layer 1
+- `~/.claude/CLAUDE.md` + `RTK.md` for layer 2 (present, imports, size)
+
+Verdicts on the cards: pxpipe = `saving` / `check` (30%+ of requests negative) / `COSTING` (24h net negative) / `no data`; warpd = `compressing` / `passthrough (fail-open)`; rtk = `saving` / `idle` / `no hook`; rules = `active` / `partial` / `missing`. The pxpipe card also prints the row that matters most: **24h costing more than saving** - how many requests came back with `actual > baseline` and how many tokens that lost in total. On this box after a day: 3 requests out of 403, 301 tokens lost against 148.9M saved. Those three were tiny Haiku classifier calls where the image overhead was bigger than the text it replaced; pxpipe already passes most of them through untouched.
+
+The ledger at the bottom is per-request: time, model, baseline, actual (already includes the image tokens), saved %, images, transform ms, total ms, reason (`collapsed` / `passthrough` / `error`). It's meant for a glance, not a spreadsheet.
+
+Cost the monitor adds: one Node process, ~30 MB, reads files on a timer. It doesn't sit in the request path at all, so it can never make a request slower or break one.
+
+## 8. Numbers from this box
 
 - rtk: 62.8% overall on the first four covered commands; `git status` 76%.
 - pxpipe (desktop session, ~110k chars of history -> 42-45 images): 46-52% saved per request; first turn after a switch 30-60 s (render + cache miss), then 7-13 s with cache hits.
+- pxpipe, a day later (long desktop session, ~690k baseline tokens -> 53 images): 84-86% per request, 80.8% net over 24 h / 403 requests, 3 requests negative (301 tokens). ~1.4 s render per request. From the monitor.
 - claude-token-efficient: not benchmarked locally; upstream says 21-38% cheaper cost-to-green depending on model.
 
-## 8. Rough edges
+## 9. Rough edges
 
 - rtk covers a fixed list of commands; the rest pass through unfiltered (`rtk gain --history` shows 0% for those).
 - warpd is only battle-tested on Windows. The TypeScript is portable; `stack/bin/pxpipe-ctl.sh` + `install.sh` are the Linux/macOS port (start/stop/status/health/doctor/savings/desktop-on|off/config/autostart via systemd user unit or launchd plist). They were exercised from Git Bash on the Windows box, not on a real Linux/mac install yet.
-- pxpipe's image rendering is lossy for very old context on purpose. If a task needs exact recall of something far back, have the model re-read the source file instead of trusting its memory of the picture.
+- pxpipe's image rendering is lossy for very old context on purpose. Exact identifiers survive (pxpipe appends a plain-text fact sheet of paths/hashes/versions/ids next to every image and tells the model to quote from it), prose can get paraphrased. If a task needs exact recall of something far back, have the model re-read the source file instead of trusting its memory of the picture.
+- pxpipe adds ~1.4 s of render time per request on a long session (`xform ms` on the monitor). It's a latency cost, not a token cost, and it disappears when the request is small enough to pass through.
+- The rules layer can't be measured at runtime (no A/B in one session), so its card only says active/missing. Upstream's benchmark is the number to trust for that one.
+- Only layer 2 reaches the claude.ai chat, and only by pasting `stack/chat-preferences.md` into your preferences. There's no proxy trick for the chat and we're not going to try one.
 - Built in one sitting with Claude driving; expect the odd sharp corner. Issues welcome.

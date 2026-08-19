@@ -50,6 +50,7 @@ echo "  installed"
 say "Step 4: pxpipe-ctl.sh + warpd -> $BIN"
 cp "$here/stack/bin/pxpipe-ctl.sh" "$BIN/pxpipe-ctl.sh"; chmod +x "$BIN/pxpipe-ctl.sh"
 rm -rf "$BIN/lib/warpd"; cp -R "$here/stack/bin/lib/warpd" "$BIN/lib/warpd"
+cp "$here/stack/bin/lib/monitor.js" "$BIN/lib/monitor.js"
 ln -sf "$BIN/pxpipe-ctl.sh" "$BIN/pxpipe-ctl"
 case ":$PATH:" in *":$BIN:"*) ;; *) echo "  NOTE: add $BIN to PATH (export PATH=\"\$HOME/.local/bin:\$PATH\")";; esac
 cat > "$BIN/claude-px" <<'EOF'
@@ -68,4 +69,4 @@ if [ $NO_DESKTOP -eq 0 ] && [ $SKIP_PX -eq 0 ]; then
   "$BIN/pxpipe-ctl.sh" desktop-on
   echo "  restart the Claude desktop app / open a new terminal for it to take effect. Undo: pxpipe-ctl desktop-off"
 fi
-say "done. Check: pxpipe-ctl doctor   dashboard: http://127.0.0.1:47821/"
+say "done. Check: pxpipe-ctl doctor   monitor: pxpipe-ctl monitor open  (http://127.0.0.1:47823/)"

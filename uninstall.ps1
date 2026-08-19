@@ -58,7 +58,7 @@ foreach ($f in "CLAUDE.md","RTK.md") {
 Remove-Item (Join-Path $ClaudeDir "token-stack") -Recurse -Force -ErrorAction SilentlyContinue
 
 Step "Scripts removed from $Bin"
-foreach ($p in "pxpipe-ctl.cmd","claude-px.cmd","lib\pxpipe-ctl.ps1","lib\claude-px.ps1","lib\warpd") {
+foreach ($p in "pxpipe-ctl.cmd","claude-px.cmd","lib\pxpipe-ctl.ps1","lib\claude-px.ps1","lib\monitor.js","lib\warpd") {
   $full = Join-Path $Bin $p
   if (Test-Path $full) { Remove-Item $full -Recurse -Force; Write-Host "  removed $p" }
 }

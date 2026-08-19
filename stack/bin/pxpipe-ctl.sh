@@ -11,6 +11,7 @@ LOG="$PXDIR/proxy.log"; LOGERR="$PXDIR/proxy.err.log"
 WLOG="$PXDIR/warpd.log"; WERR="$PXDIR/warpd.err.log"
 EVENTS="$PXDIR/events.jsonl"
 WARPD_TS="$HERE/lib/warpd/warpd.ts"
+MON_JS="$HERE/lib/monitor.js"; MLOG="$PXDIR/monitor.log"
 SETTINGS="$HOME/.claude/settings.json"
 SELF="$HERE/pxpipe-ctl.sh"; HOOK_MARKER="pxpipe-ctl.sh"
 QUIET=0
@@ -26,6 +27,7 @@ if [ -f "$DAEMON_ENV" ]; then
 fi
 PORT="${PXPIPE_PORT:-47821}"; WPORT="${PXPIPE_WARP_PORT:-47822}"
 BASE="http://127.0.0.1:$PORT"; WURL="http://127.0.0.1:$WPORT"
+MPORT="${PXPIPE_MONITOR_PORT:-47823}"; MURL="http://127.0.0.1:$MPORT"
 
 say() { [ "$QUIET" = 1 ] || echo "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -77,8 +79,16 @@ stop_port() {  # $1 port, $2 name
   kill "$pid" 2>/dev/null; sleep 0.5; kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
   say "$2: stopped (pid $pid)"
 }
-start_all() { start_proxy && start_warpd; }
-stop_all() { stop_port "$WPORT" warpd; stop_port "$PORT" pxpipe; }
+start_monitor() {
+  if listening "$MPORT"; then say "monitor: already listening on $MPORT"; return 0; fi
+  [ -f "$MON_JS" ] || { echo "monitor.js missing at $MON_JS" >&2; return 1; }
+  rotate "$MLOG"
+  PXPIPE_PORT="$PORT" PXPIPE_WARP_PORT="$WPORT" PXPIPE_MONITOR_PORT="$MPORT" nohup node "$MON_JS" >"$MLOG" 2>&1 </dev/null &
+  disown 2>/dev/null || true
+  wait_listening "$MPORT" 10 && say "monitor: RUNNING on $MURL/" || { echo "monitor did not start. See $MLOG" >&2; return 1; }
+}
+start_all() { start_proxy && start_warpd; start_monitor || say "monitor: not started (best-effort)"; }
+stop_all() { stop_port "$WPORT" warpd; stop_port "$PORT" pxpipe; listening "$MPORT" && stop_port "$MPORT" monitor; true; }
 
 # ---- settings.json ----
 node_settings() {  # $1 = mode (on|off|status)
@@ -118,6 +128,7 @@ show_status() {
   local h; h="$(http "$WURL/healthz" 2)"; [ -n "$h" ] && echo "warpd health: $h"
   local st; st="$(node_settings status 2>/dev/null)"; echo "settings.json: $st"
   local mode="terminal only"; echo "$st" | grep -q "\"proxy\":\"$WURL\"" && mode="desktop: always-on ROUTING ENABLED"; echo "mode: $mode"
+  listening "$MPORT" && echo "monitor: RUNNING $MURL/  (all 3 layers)" || echo "monitor: off  (pxpipe-ctl.sh monitor)"
   echo "logs: $LOG | $WLOG"
 }
 health() {
@@ -216,10 +227,11 @@ case "$cmd" in
   savings) savings ;;
   logs) tail -n "${1:-40}" "$LOG" "$WLOG" 2>/dev/null ;;
   dashboard) open_url "$BASE/" ;;
+  monitor) case "${1:-}" in stop) stop_port "$MPORT" monitor ;; open) listening "$MPORT" || start_monitor; open_url "$MURL/" ;; *) start_monitor && echo "monitor: $MURL/  (pxpipe-ctl monitor open|stop)" ;; esac ;;
   desktop-on) desktop_on ;;
   desktop-off) desktop_off ;;
   config) config_cmd "$@" ;;
   autostart) autostart "$@" ;;
   --quiet) start_all ;;
-  *) echo "usage: pxpipe-ctl.sh start|stop|restart|status|health|doctor|savings|logs [n]|dashboard|desktop-on|desktop-off|config ...|autostart on|off|status  [--quiet]" ;;
+  *) echo "usage: pxpipe-ctl.sh start|stop|restart|status|health|doctor|savings|logs [n]|dashboard|monitor [stop|open]|desktop-on|desktop-off|config ...|autostart on|off|status  [--quiet]" ;;
 esac

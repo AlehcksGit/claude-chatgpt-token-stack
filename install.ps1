@@ -53,7 +53,7 @@ function BackupThenCopy($src, $dst, $suffix) {
   Write-Host "  installed $(Split-Path $dst -Leaf)"
 }
 
-foreach ($p in "stack\CLAUDE.md","stack\RTK.md","stack\bin\lib\pxpipe-ctl.ps1","stack\bin\lib\warpd\warpd.ts","docs\HOW-IT-WORKS.md") {
+foreach ($p in "stack\CLAUDE.md","stack\RTK.md","stack\bin\lib\pxpipe-ctl.ps1","stack\bin\lib\warpd\warpd.ts","stack\bin\lib\monitor.js","docs\HOW-IT-WORKS.md") {
   if (-not (Test-Path (Join-Path $Repo $p))) { throw "Missing $p - run this script from the extracted repo folder." }
 }
 
@@ -123,8 +123,9 @@ if (-not $SkipPxpipe) {
   New-Item -ItemType Directory -Force (Join-Path $Bin "lib\warpd") | Out-Null
   Copy-Item (Join-Path $Repo "stack\bin\*.cmd")         $Bin -Force
   Copy-Item (Join-Path $Repo "stack\bin\lib\*.ps1")     (Join-Path $Bin "lib") -Force
+  Copy-Item (Join-Path $Repo "stack\bin\lib\monitor.js") (Join-Path $Bin "lib") -Force
   Copy-Item (Join-Path $Repo "stack\bin\lib\warpd\*")   (Join-Path $Bin "lib\warpd") -Force
-  Get-ChildItem $Bin -Recurse -File -Include *.cmd,*.ps1,*.ts | ForEach-Object { "  $($_.FullName.Replace($UserHome + '\',''))" }
+  Get-ChildItem $Bin -Recurse -File -Include *.cmd,*.ps1,*.ts,*.js |ForEach-Object { "  $($_.FullName.Replace($UserHome + '\',''))" }
 
   $userPath = [Environment]::GetEnvironmentVariable("Path","User")
   if (($userPath -split ';') -notcontains $Bin) {
@@ -149,7 +150,7 @@ Step "Done"
 Write-Host @"
 Next:
   1. Restart the Claude desktop app (if you use it) and open a NEW terminal.
-  2. Check:   pxpipe-ctl status      rtk gain      http://127.0.0.1:47821/
+  2. Check:   pxpipe-ctl status      pxpipe-ctl monitor open   (all-in-one page, http://127.0.0.1:47823/)
   3. Work as usual. Panic switch: pxpipe-ctl desktop-off  (then restart the desktop app)
 Full write-up: docs\HOW-IT-WORKS.md   Revert everything: uninstall.ps1
 "@

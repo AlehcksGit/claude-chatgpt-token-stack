@@ -35,6 +35,8 @@ $WarpLog  = Join-Path $PxDir "warpd.log"
 $WarpErr  = Join-Path $PxDir "warpd.err.log"
 $Events   = Join-Path $PxDir "events.jsonl"
 $WarpdTs  = Join-Path $PSScriptRoot "warpd\warpd.ts"
+$MonJs    = Join-Path $PSScriptRoot "monitor.js"
+$MonLog   = Join-Path $PxDir "monitor.log"
 $Self     = $PSCommandPath
 $HookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$Self`" start -Quiet"
 $HookMarker  = "pxpipe-ctl.ps1"
@@ -65,6 +67,8 @@ foreach ($k in $Cfg.Keys) { if (-not (Test-Path "Env:$k")) { Set-Item -Path "Env
 
 $Port     = if ($env:PXPIPE_PORT)      { [int]$env:PXPIPE_PORT }      else { 47821 }
 $WarpPort = if ($env:PXPIPE_WARP_PORT) { [int]$env:PXPIPE_WARP_PORT } else { 47822 }
+$MonPort  = if ($env:PXPIPE_MONITOR_PORT) { [int]$env:PXPIPE_MONITOR_PORT } else { 47823 }
+$MonUrl   = "http://127.0.0.1:$MonPort"
 $Base     = "http://127.0.0.1:$Port"
 $WarpUrl  = "http://127.0.0.1:$WarpPort"
 $EnvKeys  = [ordered]@{
@@ -206,8 +210,20 @@ function Start-Warpd {
   if (Wait-Listening $WarpPort 15) { Say "warpd: RUNNING on $WarpUrl (CA: $CA)" "Green" }
   else { throw "warpd did not start. See $WarpErr" }
 }
-function Start-All { Start-Proxy; Start-Warpd }
-function Stop-All  { Stop-ByPort $WarpPort "warpd"; Stop-ByPort $Port "pxpipe" }
+function Start-Monitor {
+  if (Test-Listening $MonPort) { Say "monitor: already listening on $MonPort" "DarkGray"; return }
+  if (-not (Test-Path $MonJs)) { throw "monitor.js missing at $MonJs" }
+  Rotate-Log $MonLog
+  $env:PXPIPE_PORT = "$Port"; $env:PXPIPE_WARP_PORT = "$WarpPort"; $env:PXPIPE_MONITOR_PORT = "$MonPort"
+  Start-Process -FilePath node -ArgumentList "`"$MonJs`"" -WindowStyle Hidden -RedirectStandardOutput $MonLog -RedirectStandardError (Join-Path $PxDir "monitor.err.log") | Out-Null
+  if (Wait-Listening $MonPort 10) { Say "monitor: RUNNING on $MonUrl/" "Green" } else { throw "monitor did not start. See $PxDir\monitor.err.log" }
+}
+function Start-All {
+  Start-Proxy; Start-Warpd
+  # monitor is best-effort: never let it block a session start (SessionStart hook calls this)
+  try { Start-Monitor } catch { Say "monitor: $($_.Exception.Message)" "DarkGray" }
+}
+function Stop-All  { Stop-ByPort $WarpPort "warpd"; Stop-ByPort $Port "pxpipe"; if (Test-Listening $MonPort) { Stop-ByPort $MonPort "monitor" } }
 
 # ---------- settings.json (desktop-on/off) ----------
 function Enable-Desktop {
@@ -276,6 +292,7 @@ function Show-Status {
   Write-Host "  rtk       : " -NoNewline
   if (Have rtk) { $rv = Get-Version rtk "--version"; $hk = if (Test-RtkHook $s) { "hook installed" } else { "HOOK MISSING (rtk init -g)" }; Write-Host "$rv, $hk" -ForegroundColor $(if ($hk -like "hook installed") {"Green"} else {"Yellow"}) } else { Write-Host "not on PATH" -ForegroundColor Red }
   $sum = Savings-Summary; if ($sum) { Write-Host "  savings   : $sum" -ForegroundColor Cyan }
+  Write-Host "  monitor   : $(if (Test-Listening $MonPort) {"RUNNING  $MonUrl/  (all 3 layers, per-request net savings)"} else {"off (pxpipe-ctl monitor)"})" -ForegroundColor DarkGray
   Write-Host "  autostart : $(if (Test-AutostartTask) {'logon task ON'} else {'off (pxpipe-ctl autostart on)'})" -ForegroundColor DarkGray
   Write-Host "  dashboard : $Base/     logs: pxpipe-ctl logs     doctor: pxpipe-ctl doctor" -ForegroundColor DarkGray
   Write-Host ""
@@ -304,6 +321,10 @@ function Run-Doctor {
   Check "settings.json parses" $settingsOk $Settings "restore from $Settings.pre-pxpipe.bak"
   if (-not $s) { $s = [pscustomobject]@{} }
   Check "rtk PreToolUse hook" (Test-RtkHook $s) "rtk hook claude" "rtk init -g" { & rtk init -g | Out-Null } (-not $rtkOk)
+  if (Test-RtkHook $s) {
+    $m = "(none)"; foreach ($h in @($s.hooks.PreToolUse)) { foreach ($x in @($h.hooks)) { if ("$($x.command)" -match 'rtk hook') { $m = "$($h.matcher)" } } }
+    Check "rtk hook matcher" ($m -match 'PowerShell') "matcher = $m" "set the hook matcher to `"Bash|PowerShell`" in settings.json so PowerShell tool output is filtered too" $null $true
+  }
   $rgOk = Have rg
   Check "ripgrep (rg) on PATH" $rgOk $(if ($rgOk) { Get-Version rg "--version" } else { "missing (some rtk filters and Claude Grep want it)" }) "winget install BurntSushi.ripgrep.MSVC" $null $true
 
@@ -351,6 +372,8 @@ function Run-Doctor {
   Check "claude-px launcher" (Test-Path (Join-Path $binDir "claude-px.cmd")) (Join-Path $binDir "claude-px.cmd") "re-run install.ps1" $null $true
   $taskOn = Test-AutostartTask
   Check "logon autostart task" $taskOn $(if ($taskOn) { "on" } else { "off (optional; the SessionStart hook also starts the daemons)" }) "pxpipe-ctl autostart on" $null $true
+  $monUp = Test-Listening $MonPort
+  Check "monitor :$MonPort" $monUp $(if ($monUp) { $MonUrl } else { "off (optional; pxpipe-ctl monitor)" }) "pxpipe-ctl monitor" { Start-Monitor } $true
 
   Write-Host ""
   if ($script:DocFail -eq 0 -and $script:DocWarn -eq 0) { Write-Host "  all checks passed" -ForegroundColor Green }
@@ -428,7 +451,8 @@ pxpipe-ctl - claude-token-stack daemon control
 
   start | stop | restart      pxpipe (:$Port) + warpd (:$WarpPort)
   status                      what is running, routing state, savings, autostart
-  dashboard                   open $Base/ in the browser
+  dashboard                   open $Base/ in the browser (pxpipe's own page)
+  monitor [stop|open]         all-in-one monitor on $MonUrl/ (rtk + rules + pxpipe + warpd, per-request net savings, what is costing)
   logs [-All]                 tail proxy + warpd logs (-All: full files)
   desktop-on | desktop-off    always-on routing for the Claude desktop app + terminals (settings.json env + SessionStart hook)
   doctor [-Fix]               check every layer; -Fix applies safe repairs (start daemons, re-run desktop-on, rtk init -g)
@@ -448,6 +472,13 @@ switch ($Cmd.ToLower()) {
   "restart"     { Stop-All; Start-Sleep -Milliseconds 500; Start-All }
   "status"      { Show-Status }
   "dashboard"   { Start-Process "$Base/" }
+  "monitor"     {
+    switch ("$Arg1".ToLower()) {
+      "stop" { Stop-ByPort $MonPort "monitor" }
+      "open" { if (-not (Test-Listening $MonPort)) { Start-Monitor }; Start-Process "$MonUrl/" }
+      default { Start-Monitor; Say "monitor: $MonUrl/   (pxpipe-ctl monitor open | stop)" "Cyan" }
+    }
+  }
   "logs"        {
     foreach ($pair in @(@("pxpipe", $Log), @("pxpipe.err", $LogErr), @("warpd", $WarpLog), @("warpd.err", $WarpErr))) {
       Write-Host "--- $($pair[0]) ($($pair[1])) ---" -ForegroundColor Cyan
