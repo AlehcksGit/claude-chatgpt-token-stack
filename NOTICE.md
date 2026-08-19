@@ -25,9 +25,3 @@ This repository redistributes, unmodified except where stated, the source of thr
 - Author: Patrick Szymkowiak
 - License: Apache License 2.0 - full text in `upstream/rtk/LICENSE`
 - Modifications: none. `stack/RTK.md` is the file `rtk init` generates, unchanged.
-
-## Everything else
-
-`install.ps1`, `uninstall.ps1`, `stack/bin/**` (except the four vendored warp files), `docs/`, `README.md`: MIT, Copyright (c) 2026 Alex Carter - see `LICENSE`.
-
-Claude, Claude Code and the Claude desktop app are products of Anthropic. This project is not affiliated with or endorsed by Anthropic.
