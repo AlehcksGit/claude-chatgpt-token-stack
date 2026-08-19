@@ -100,6 +100,7 @@ Two ways to feed it:
 
 | Command | Does |
 |---|---|
+| `setup` | the question/answer front end (`setup.cmd` in the repo): shows every piece with its state and path, add / remove / toggle one at a time, or the 3-question quick install. Runs from the copy of the scripts staged in `~/.claude/token-stack/src` so it works after the zip is gone. Only ever calls install.ps1 / uninstall.ps1 / pxpipe-ctl |
 | `start [-Quiet]` | start pxpipe, warpd and the monitor if not listening (what the SessionStart hook calls; the monitor is best-effort) |
 | `stop` / `restart` | stop / restart all three |
 | `status` | daemons, PIDs, dashboard URL, always-on state, savings (24h / 7d / all-time from `events.jsonl` + `rtk gain`), autostart state |
@@ -146,5 +147,5 @@ Cost the monitor adds: one Node process, ~30 MB, reads files on a timer. It does
 - pxpipe's image rendering is lossy for very old context on purpose. Exact identifiers survive (pxpipe appends a plain-text fact sheet of paths/hashes/versions/ids next to every image and tells the model to quote from it), prose can get paraphrased. If a task needs exact recall of something far back, have the model re-read the source file instead of trusting its memory of the picture.
 - pxpipe adds ~1.4 s of render time per request on a long session (`xform ms` on the monitor). It's a latency cost, not a token cost, and it disappears when the request is small enough to pass through.
 - The rules layer can't be measured at runtime (no A/B in one session), so its card only says active/missing. Upstream's benchmark is the number to trust for that one.
-- Only layer 2 reaches the claude.ai chat, and only by pasting `stack/chat-preferences.md` into your preferences. There's no proxy trick for the chat and we're not going to try one.
+- Only layer 2 reaches the claude.ai chat, and only by pasting `stack/chat-preferences.md` into your preferences (`setup.cmd` -> 7 puts it on the clipboard and opens the settings page; there is nothing to detect, so setup always shows it as "manual"). There's no proxy trick for the chat and we're not going to try one.
 - Built in one sitting with Claude driving; expect the odd sharp corner. Issues welcome.

@@ -460,6 +460,7 @@ pxpipe-ctl - claude-token-stack daemon control
   update                      npm install -g pxpipe-proxy@latest, winget upgrade rtk, restart
   config list|get|set|unset   persistent daemon env in $DaemonEnv (e.g. config set PXPIPE_MODELS off)
   autostart on|off|status     Windows logon task so the daemons are up before the first session
+  setup                       the question-driven manager: what is installed + where, add/remove pieces, chat preferences
 
 Panic switch: pxpipe-ctl desktop-off  (then restart the desktop app)   Docs: docs\HOW-IT-WORKS.md
 "@
@@ -492,6 +493,12 @@ switch ($Cmd.ToLower()) {
   "update"      { Run-Update }
   "config"      { Run-Config }
   "autostart"   { Run-Autostart }
+  "setup"       {
+    # install.ps1 stages a copy of the repo here so this works after the downloaded zip is gone
+    $setup = Join-Path $env:USERPROFILE ".claude\token-stack\src\setup.ps1"
+    if (-not (Test-Path $setup)) { Write-Host "setup.ps1 not staged (older install). Run setup.cmd from the repo folder, or re-run install.ps1 once." -ForegroundColor Yellow; exit 1 }
+    & $setup
+  }
   "help"        { Show-Help }
   "-h"          { Show-Help }
   "--help"      { Show-Help }

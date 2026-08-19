@@ -5,8 +5,12 @@
   Run from the extracted repo folder (a GitHub .zip download is fine):
     powershell -ExecutionPolicy Bypass -File .\install.ps1
 
+  Prefer questions over flags? Double-click setup.cmd (or: powershell -ExecutionPolicy Bypass -File .\setup.ps1).
+
   Options:
     -SkipRtk          do not install rtk/ripgrep or its hook
+    -NoHook           install rtk but do not add its PreToolUse hook to settings.json
+    -SkipRules        do not touch ~\.claude\CLAUDE.md / RTK.md
     -SkipPxpipe       do not install pxpipe/warpd/scripts
     -NoDesktop        install everything but leave always-on routing OFF (enable later: pxpipe-ctl desktop-on)
     -Profile <name>   which CLAUDE.md rules to install (re-run with -SkipRtk -SkipPxpipe to switch later):
@@ -25,6 +29,8 @@
 [CmdletBinding()]
 param(
   [switch]$SkipRtk,
+  [switch]$NoHook,
+  [switch]$SkipRules,
   [switch]$SkipPxpipe,
   [switch]$NoDesktop,
   [ValidateSet("default","compressed","coding","analysis","agents")]
@@ -86,25 +92,39 @@ if (-not $SkipRtk) {
 }
 
 # ---------------------------------------------------------------- Layer 2: rules
-Step "Layer 2: claude-token-efficient rules (profile: $Profile) -> ~\.claude\CLAUDE.md + RTK.md  [drona23/claude-token-efficient, MIT]"
-New-Item -ItemType Directory -Force $ClaudeDir | Out-Null
-if ($Profile -eq "default") {
-  $rulesSrc = Join-Path $Repo "stack\CLAUDE.md"
-} else {
-  # upstream profile verbatim + the rtk import line, staged in ~\.claude\token-stack\ so BackupThenCopy can hash-compare it
-  $up = Join-Path $Repo "upstream\claude-token-efficient\profiles\CLAUDE.$Profile.md"
-  if (-not (Test-Path $up)) { throw "profile file missing: $up (the upstream\ folder ships with the repo zip)" }
-  New-Item -ItemType Directory -Force (Join-Path $ClaudeDir "token-stack") | Out-Null
-  $rulesSrc = Join-Path $ClaudeDir "token-stack\CLAUDE.$Profile.md"
-  $body = (Get-Content $up -Raw).TrimEnd()
-  Set-Content -Path $rulesSrc -Encoding UTF8 -Value "$body`n`n@RTK.md`n"
-}
-BackupThenCopy $rulesSrc                           (Join-Path $ClaudeDir "CLAUDE.md") ".pre-token-stack.bak"
-BackupThenCopy (Join-Path $Repo "stack\RTK.md")    (Join-Path $ClaudeDir "RTK.md")    ".pre-token-stack.bak"
 New-Item -ItemType Directory -Force (Join-Path $ClaudeDir "token-stack") | Out-Null
-Copy-Item (Join-Path $Repo "docs\HOW-IT-WORKS.md") (Join-Path $ClaudeDir "token-stack\README.md") -Force
+if (-not $SkipRules) {
+  Step "Layer 2: claude-token-efficient rules (profile: $Profile) -> ~\.claude\CLAUDE.md + RTK.md  [drona23/claude-token-efficient, MIT]"
+  if ($Profile -eq "default") {
+    $rulesSrc = Join-Path $Repo "stack\CLAUDE.md"
+  } else {
+    # upstream profile verbatim + the rtk import line, staged in ~\.claude\token-stack\ so BackupThenCopy can hash-compare it
+    $up = Join-Path $Repo "upstream\claude-token-efficient\profiles\CLAUDE.$Profile.md"
+    if (-not (Test-Path $up)) { throw "profile file missing: $up (the upstream\ folder ships with the repo zip)" }
+    $rulesSrc = Join-Path $ClaudeDir "token-stack\CLAUDE.$Profile.md"
+    $body = (Get-Content $up -Raw).TrimEnd()
+    Set-Content -Path $rulesSrc -Encoding UTF8 -Value "$body`n`n@RTK.md`n"
+  }
+  BackupThenCopy $rulesSrc                           (Join-Path $ClaudeDir "CLAUDE.md") ".pre-token-stack.bak"
+  BackupThenCopy (Join-Path $Repo "stack\RTK.md")    (Join-Path $ClaudeDir "RTK.md")    ".pre-token-stack.bak"
+}
+Copy-Item (Join-Path $Repo "docs\HOW-IT-WORKS.md")      (Join-Path $ClaudeDir "token-stack\README.md") -Force
+Copy-Item (Join-Path $Repo "stack\chat-preferences.md") (Join-Path $ClaudeDir "token-stack\chat-preferences.md") -Force
 
-if (-not $SkipRtk) {
+# Stage a copy of the repo (scripts, rules, profiles, docs - not the big upstream trees) in ~\.claude\token-stack\src
+# so `pxpipe-ctl setup` / setup.cmd keep working after the downloaded zip is gone.
+$Src = Join-Path $ClaudeDir "token-stack\src"
+if ((Resolve-Path $Repo).Path -ne $Src) {
+  if (Test-Path $Src) { Remove-Item $Src -Recurse -Force }
+  New-Item -ItemType Directory -Force (Join-Path $Src "upstream\claude-token-efficient") | Out-Null
+  foreach ($p in "install.ps1","uninstall.ps1","setup.ps1","setup.cmd","install.sh","stack","docs","NOTICE.md","LICENSE") {
+    if (Test-Path (Join-Path $Repo $p)) { Copy-Item (Join-Path $Repo $p) (Join-Path $Src $p) -Recurse -Force }
+  }
+  Copy-Item (Join-Path $Repo "upstream\claude-token-efficient\profiles") (Join-Path $Src "upstream\claude-token-efficient\profiles") -Recurse -Force
+  Write-Host "  staged a copy of the scripts in $Src (for 'pxpipe-ctl setup' later)"
+}
+
+if (-not $SkipRtk -and -not $NoHook) {
   Step "rtk hook -> ~\.claude\settings.json  (rtk init -g)"
   # Adds the PreToolUse hook 'rtk hook claude'; leaves CLAUDE.md alone because it already contains '@RTK.md'.
   # rtk may ask once about anonymous telemetry; answer as you like (RTK_TELEMETRY_DISABLED=1 also works).
@@ -152,5 +172,6 @@ Next:
   1. Restart the Claude desktop app (if you use it) and open a NEW terminal.
   2. Check:   pxpipe-ctl status      pxpipe-ctl monitor open   (all-in-one page, http://127.0.0.1:47823/)
   3. Work as usual. Panic switch: pxpipe-ctl desktop-off  (then restart the desktop app)
-Full write-up: docs\HOW-IT-WORKS.md   Revert everything: uninstall.ps1
+  4. claude.ai chat too? The rules can be pasted into your chat preferences: setup.cmd -> 7 (or ~\.claude\token-stack\chat-preferences.md)
+Add/remove pieces later: pxpipe-ctl setup (or setup.cmd)   Full write-up: docs\HOW-IT-WORKS.md   Revert everything: uninstall.ps1
 "@

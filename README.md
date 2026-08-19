@@ -24,13 +24,15 @@ You need: Windows 10/11, [Node.js](https://nodejs.org) 22.7+ (24 LTS was used), 
 
 1. Grab the .zip (green **Code** button -> **Download ZIP**) or `git clone`.
 2. Unzip anywhere.
-3. PowerShell in that folder (cd C:\<download folder>):
+3. Double-click `setup.cmd`. It asks three questions (where do you use Claude: Code, the claude.ai chat, or both; desktop app always-on or not; rules profile) and runs the right install. Or skip the questions:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 Then restart the Claude desktop app and/or open a new terminal. That's it.
+
+`setup.cmd` (later: `pxpipe-ctl setup`, from anywhere) also shows what is installed and where, and lets you add, remove or toggle one piece at a time: rules, rtk, hook, pxpipe + warpd, desktop always-on, autostart, chat preferences.
 
 Flags if you want less: `-SkipRtk`, `-SkipPxpipe`, `-NoDesktop` (rules + rtk + scripts, but leave the desktop app alone), `-NoHook` (skip the rtk hook), `-PxpipeVersion x.y.z`. `-Profile compressed|coding|analysis|agents` swaps in one of the upstream rules profiles instead of the default.
 
@@ -60,7 +62,7 @@ Honest list of how Claude will feel different with the stack on. None of it is s
 - **Big requests take longer.** Rendering costs ~1.4 s per request on a long session (you can see `xform ms` on the monitor); short requests pass straight through with no delay. The first request in a fresh session may pause a few seconds while the daemons come up.
 - **Savings vary by request.** Small requests (the classifier calls Claude Code makes with Haiku, a fresh session with no history) are passed through unchanged, so those show ~0% saved; that's expected. Long sessions on the big models sit at 80-86% here. The monitor tells you per-request and per-model whether a layer is actually paying for itself.
 - **Failure mode is boring on purpose.** If pxpipe dies, warpd hands requests straight to Anthropic uncompressed and restarts pxpipe with backoff. If warpd itself dies, the app can't reach the API until `pxpipe-ctl start` (any new session runs that automatically). Nothing is lost either way; the worst case is a normal-priced request.
-- **Only Claude Code, not the claude.ai chat.** rtk needs a shell, pxpipe needs to sit on the API. The chat can only get the rules, by pasting them into your claude.ai preferences: see `stack/chat-preferences.md`.
+- **Only Claude Code, not the claude.ai chat.** rtk needs a shell, pxpipe needs to sit on the API. The chat can only get the rules, pasted into your claude.ai preferences (Settings -> Profile -> "What personal preferences should Claude consider in responses?"): `setup.cmd` -> 7 copies the block to the clipboard and opens that page; the raw text is `stack/chat-preferences.md`.
 
 Nothing here reads, stores or forwards anything off-box. All three daemons are loopback only; the only thing written to disk is a metrics log (token counts and timings, no message content).
 
@@ -69,6 +71,7 @@ Nothing here reads, stores or forwards anything off-box. All three daemons are l
 Just use Claude like before. Things to poke at:
 
 ```
+pxpipe-ctl setup         the question/answer front end: what's installed, where, add/remove/toggle pieces
 pxpipe-ctl status        who's running, always-on state, tokens saved (24h / 7d / all), autostart
 pxpipe-ctl doctor        health check of all three layers; -Fix repairs what it can
 pxpipe-ctl monitor       opens http://127.0.0.1:47823/  (all three layers on one page: net tokens per request, per model, which requests cost more than they saved, rtk + rules status)
@@ -99,6 +102,8 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # setting
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveTools  # also uninstalls rtk + pxpipe and deletes ~\.pxpipe
 ```
 
+Or `setup.cmd` -> R for the same thing with a confirmation, or the per-piece removes (rules only, hook only, ...).
+
 Backups the installer left: `~/.claude/settings.json.pre-pxpipe.bak`, `~/.claude/CLAUDE.md.pre-token-stack.bak`, `~/.claude/RTK.md.pre-token-stack.bak`.
 
 ## Good to know
@@ -111,6 +116,7 @@ Backups the installer left: `~/.claude/settings.json.pre-pxpipe.bak`, `~/.claude
 ## What's where
 
 ```
+setup.cmd / setup.ps1    the questions front end (also `pxpipe-ctl setup`); only ever calls the two below
 install.ps1 / uninstall.ps1   Windows;  install.sh  Linux/macOS
 stack/CLAUDE.md          global rules (upstream's universal file + condensed coding profile + @RTK.md)
 stack/RTK.md             rtk's cheat-sheet for the model (what rtk init generates)
