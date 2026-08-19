@@ -1,105 +1,105 @@
 # claude-token-stack
 
-Three open-source token savers for Claude Code, wired together so they all run at once - in the terminal **and inside the Claude desktop app** - with a one-shot Windows installer and full upstream source included.
+A homebrewed kitbash of three token-saving projects for Claude Code, glued together in an afternoon with Claude's help so they all run at once - in the terminal *and* inside the Claude desktop app. One installer, full upstream source in the box, nothing clever of our own beyond the glue.
 
-| Layer | What it cuts | Project | Author | License |
+The three projects doing the actual work:
+
+| Layer | What it trims | Project | By | License |
 |---|---|---|---|---|
 | 1 | CLI tool output (git, ls, cargo, npm, tests...) | [rtk - Rust Token Killer](https://github.com/rtk-ai/rtk) | Patrick Szymkowiak ([rtk-ai](https://github.com/rtk-ai)) | Apache-2.0 |
-| 2 | Model verbosity (rules that stop preamble, boilerplate, sycophancy) | [claude-token-efficient](https://github.com/drona23/claude-token-efficient) | [drona23](https://github.com/drona23) | MIT |
-| 3 | Context size on the wire (renders old history/tool docs to images) | [pxpipe](https://github.com/teamchong/pxpipe) | [teamchong](https://github.com/teamchong) and the claude-image-proxy contributors | MIT |
+| 2 | How much the model talks (rules against preamble, boilerplate, sycophancy) | [claude-token-efficient](https://github.com/drona23/claude-token-efficient) | [drona23](https://github.com/drona23) | MIT |
+| 3 | Context on the wire (renders old history / tool docs to images) | [pxpipe](https://github.com/teamchong/pxpipe) | [teamchong](https://github.com/teamchong) + the claude-image-proxy contributors | MIT |
 
-All credit for the savings goes to those three projects. This repo is the glue: an installer, a small daemon (`warpd`) that lets pxpipe reach the desktop app, a control script, tuned rule files, and the write-up of how it fits together. Not affiliated with Anthropic.
+Credit for the savings is all theirs. What this repo adds: an installer, a tiny daemon (`warpd`) that gets pxpipe under the desktop app (which turned out to be the hard part), a control script, a combined rules file, and a write-up of how it fits together. Not affiliated with Anthropic or any of the three projects. Windows only for now, because that is what it was built on.
 
-Measured on the machine this was built on (Windows 10, Claude Code 2.1.222 CLI / 2.1.229 desktop engine, Node 24, rtk 0.45.0, pxpipe 0.13.1):
+What it did on the machine it was built on (Windows 10, Claude Code 2.1.222 CLI / 2.1.229 desktop engine, Node 24, rtk 0.45.0, pxpipe 0.13.1):
 
-- rtk: 62-76% fewer tokens on covered commands (`git status` 41 -> 10 tokens)
-- pxpipe: 46-52% smaller requests once a session has history (`pxpipe stats`)
-- claude-token-efficient: upstream benchmark reports 21-38% cheaper cost-to-green depending on model; not re-measured here
+- rtk: 62-76% fewer tokens on the commands it covers (`git status` went 41 -> 10 tokens)
+- pxpipe: requests 46-52% smaller once a session has some history (`pxpipe stats`)
+- claude-token-efficient: not re-measured here; upstream says 21-38% cheaper cost-to-green depending on model
 
-## Quick install (Windows)
+## Install
 
-Prerequisites: Windows 10/11, [Node.js](https://nodejs.org) 22.7+ (24 LTS recommended), `winget` (ships with Windows), Claude Code CLI and/or the Claude desktop app already signed in.
+You need: Windows 10/11, [Node.js](https://nodejs.org) 22.7+ (24 LTS is what we used), `winget` (already on Windows), and Claude Code CLI and/or the desktop app signed in.
 
-1. Download this repo as a .zip (green **Code** button -> **Download ZIP**) or `git clone` it.
-2. Extract it anywhere.
-3. Open PowerShell in the extracted folder and run:
+1. Grab the .zip (green **Code** button -> **Download ZIP**) or `git clone`.
+2. Unzip anywhere.
+3. PowerShell in that folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-That installs rtk + ripgrep (winget), pxpipe (npm), copies the rules and scripts, adds `~\.local\bin` to your PATH, starts pxpipe + warpd, and switches on always-on routing. Then:
+Then restart the Claude desktop app and/or open a new terminal. That's it.
 
-4. Restart the Claude desktop app and open a fresh terminal.
+Flags if you want less: `-SkipRtk`, `-SkipPxpipe`, `-NoDesktop` (rules + rtk + scripts, but leave the desktop app alone), `-NoHook` (skip the rtk hook), `-PxpipeVersion x.y.z`.
 
-That is it. Nothing about how you use Claude changes. Everything is a normal file under your user profile; the [uninstaller](#uninstall--rollback) puts it all back.
+## What the installer actually does
 
-Options: `-SkipRtk`, `-SkipPxpipe`, `-NoDesktop` (install but leave the always-on switch off), `-PxpipeVersion x.y.z`.
+Roughly two minutes, and it says what it's doing as it goes:
 
-Offline note: the installer pulls rtk (winget) and pxpipe (npm) from their package registries. Full source of all three projects is in [`upstream/`](upstream/) if you would rather build them yourself - see `upstream/README.md`.
+1. `winget install` rtk + ripgrep
+2. `npm install -g pxpipe-proxy`
+3. copies the rules to `~/.claude/CLAUDE.md` and `~/.claude/RTK.md` (your old ones, if any, are kept as `.pre-token-stack.bak`)
+4. adds the rtk `PreToolUse` hook to `~/.claude/settings.json` (via `rtk init -g`, then rewrites the file without a BOM because rtk chokes on one)
+5. drops `pxpipe-ctl` and `claude-px` into `~/.local/bin` and puts that on your user PATH
+6. `pxpipe-ctl desktop-on`: adds `HTTPS_PROXY` / `NO_PROXY` / `NODE_EXTRA_CA_CERTS` plus a `SessionStart` hook to `settings.json` so every Claude Code process (terminal or desktop) routes through pxpipe automatically
+7. starts pxpipe (:47821) and warpd (:47822) and runs a smoke test
 
-## Check it is working
+Nothing machine-wide changes: no system proxy, no cert in the Windows store, no service. It's all inside `~/.claude/settings.json` and `~/.local/bin`.
+
+## Day to day
+
+Just use Claude like before. Things to poke at:
+
+```
+pxpipe-ctl status        who's running, always-on state
+pxpipe-ctl dashboard     opens http://127.0.0.1:47821/  (live requests, saved %, images)
+pxpipe stats             offline numbers from ~/.pxpipe/events.jsonl
+rtk gain                 rtk's savings ledger; --history for per-command
+pxpipe-ctl desktop-off   turn the always-on routing off (settings.json edit, restart the app)
+pxpipe-ctl start         after a reboot if a session complains it can't reach the API
+```
+
+`claude-px` still exists (`pxpipe warp -- claude` with a dashboard hint) but with always-on you don't really need it.
+
+## Is it working?
+
+- Open the dashboard, ask Claude something: the request counter goes up. That's the desktop app or terminal, both.
+- Ask Claude to run `git status`: the output comes back in rtk's compact format and `rtk gain --history` shows a row.
+- `claude -p "quote the first line of your global CLAUDE.md"` returns the rules header.
+
+## Undo
 
 ```powershell
-pxpipe-ctl status        # pxpipe :47821 + warpd :47822 running, always-on: ON
-rtk gain                 # rtk's own savings meter
-start http://127.0.0.1:47821/    # pxpipe dashboard: request counter climbs with every Claude turn
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # settings, hooks, scripts, rules; leaves rtk/pxpipe installed
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveTools  # also uninstalls rtk + pxpipe and deletes ~\.pxpipe
 ```
 
-Inside a Claude session, `git status` output arriving in rtk's compact form proves layer 1; Claude answering without preamble proves layer 2; the dashboard counter proves layer 3.
+Backups the installer left: `~/.claude/settings.json.pre-pxpipe.bak`, `~/.claude/CLAUDE.md.pre-token-stack.bak`, `~/.claude/RTK.md.pre-token-stack.bak`.
 
-## Daily commands
+## Good to know
 
-| Command | Does |
-|---|---|
-| `pxpipe-ctl status` | show both daemons + whether always-on is enabled |
-| `pxpipe-ctl start` / `stop` / `restart` | manage pxpipe + warpd |
-| `pxpipe-ctl desktop-on` / `desktop-off` | toggle always-on routing (edits `~/.claude/settings.json`) |
-| `pxpipe-ctl dashboard` / `logs` | open the dashboard / tail the proxy log |
-| `pxpipe stats` | pxpipe's offline savings report |
-| `rtk gain` / `rtk gain --history` | rtk savings, per command |
-| `claude-px ...` | run one Claude session through pxpipe without always-on (older per-launch route; still works) |
+- Everything is loopback (127.0.0.1). warpd only decrypts `api.anthropic.com`, only diverts `/v1/messages*`, and blind-tunnels the rest. Its CA lives in `~/.pxpipe/warp-ca.pem` and is trusted only by processes given `NODE_EXTRA_CA_CERTS`. See pxpipe's own `upstream/pxpipe/docs/SECURITY_MODEL.md` for its side.
+- Tool shells started by Claude inherit `HTTPS_PROXY`, so `git`/`curl`/`npm` *run by Claude* pass through warpd's tunnel while it's up. Your own terminals are untouched.
+- If the daemons die mid-session, API calls fail until `pxpipe-ctl start`. Every new session auto-starts them; a bare `pxpipe-ctl start` from any terminal also works.
+- Windows PowerShell 5.1's default policy blocks `.ps1` scripts, so all commands are `.cmd` wrappers that pass `-ExecutionPolicy Bypass`.
 
-## How it works (short version)
-
-Full detail with the dead ends: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
-
-- **rtk** installs a Claude Code `PreToolUse` hook (`rtk hook claude`) that silently rewrites Bash tool calls (`git status` -> `rtk git status`), so the model sees rtk's compact output. `~/.claude/RTK.md` teaches the model the rtk commands; `~/.claude/CLAUDE.md` includes it with `@RTK.md`.
-- **claude-token-efficient** is a set of global rules. `stack/CLAUDE.md` is its global profile, lightly tuned (no em-dashes, no emojis, copy-paste-safe code, verify before asserting), living at `~/.claude/CLAUDE.md`.
-- **pxpipe** is a local HTTP proxy in front of `api.anthropic.com/v1/messages`. It rewrites each request so old conversation history and big tool descriptions are sent as rendered images instead of text (image tokens are far cheaper per character), then streams the response back unchanged. It also runs a dashboard on http://127.0.0.1:47821/.
-- **The desktop-app problem.** Terminal `claude` can be pointed at pxpipe with `ANTHROPIC_BASE_URL`. The desktop app cannot: its bundled engine gets `ANTHROPIC_BASE_URL=https://api.anthropic.com` set by the app itself, and `settings.json` env cannot override a variable the parent already set. What the engine *does* honor from `settings.json` is `HTTPS_PROXY` and `NODE_EXTRA_CA_CERTS`.
-- **warpd** (this repo, `stack/bin/lib/warpd/`) is pxpipe's own "warp" mode - a CONNECT proxy that decrypts only `api.anthropic.com` with a private per-user CA and diverts only `/v1/messages*` into pxpipe - repackaged as a fixed-port daemon on `127.0.0.1:47822`. Its four core files are vendored verbatim from pxpipe (MIT). `pxpipe-ctl desktop-on` writes `HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS` into `~/.claude/settings.json` (Claude Code processes only, nothing machine-wide, nothing in the Windows cert store) plus a `SessionStart` hook that starts both daemons if they are not running. Verified against the desktop app's own engine binary and then live in a desktop session.
-
-## Uninstall / rollback
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1            # revert settings + scripts + rules, keep rtk/pxpipe binaries
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveTools   # also winget-uninstall rtk and npm-uninstall pxpipe
-```
-
-Panic switch without the repo: `pxpipe-ctl desktop-off`, then restart the desktop app. Backups the installer made: `~/.claude/settings.json.pre-pxpipe.bak`, `~/.claude/CLAUDE.md.pre-token-stack.bak`, `~/.claude/RTK.md.pre-token-stack.bak`.
-
-## Trade-offs, honestly
-
-- pxpipe's history-as-images is lossy by design and adds latency (measured 7-13 s per turn with cache hits; 30-60 s for the first turn after a long gap while it renders). If it ever gets in the way: `pxpipe-ctl desktop-off`.
-- If pxpipe or warpd dies mid-session, Claude Code's API calls fail until `pxpipe-ctl start` (sessions auto-start them, so this is rare).
-- Inside a Claude session, tool shells inherit `HTTPS_PROXY`, so git/curl/npm run *by Claude* tunnel through warpd (blind TCP for non-Anthropic hosts). Transparent while it is up. Local http:// MCP servers are unaffected.
-- A third-party proxy sits between Claude Code and Anthropic. Everything is local (127.0.0.1) and open source; read `upstream/pxpipe/docs/SECURITY_MODEL.md` before deciding that is fine for you.
-
-## Repo layout
+## What's where
 
 ```
-install.ps1 / uninstall.ps1      one-shot installer / reverter (Windows)
-stack/CLAUDE.md, RTK.md          global rule files installed to ~/.claude/
-stack/bin/                       pxpipe-ctl.cmd, claude-px.cmd (+ lib/*.ps1)  -> ~/.local/bin/
-stack/bin/lib/warpd/             fixed-port warp daemon (4 files vendored from pxpipe, MIT)
-docs/HOW-IT-WORKS.md             full technical write-up incl. what did not work
-upstream/pxpipe/                 pxpipe 0.13.1 source (teamchong, MIT)  - eval result dumps (1.4 GB) omitted
-upstream/claude-token-efficient/ drona23, MIT
-upstream/rtk/                    rtk develop-branch source (rtk-ai, Apache-2.0)
-NOTICE.md                        third-party attributions
+install.ps1 / uninstall.ps1
+stack/CLAUDE.md          global rules (upstream's universal file + condensed coding profile + @RTK.md)
+stack/RTK.md             rtk's cheat-sheet for the model (what rtk init generates)
+stack/bin/               pxpipe-ctl, claude-px (.cmd + lib/*.ps1)
+stack/bin/lib/warpd/     fixed-port CONNECT proxy: 4 files vendored from pxpipe + a 60-line wrapper
+docs/HOW-IT-WORKS.md     the long version, including the desktop-app detour
+upstream/                full source: pxpipe (main, 0.13.1), claude-token-efficient (main), rtk (develop) + build notes
+NOTICE.md                who wrote what and under which license
 ```
 
-## License
+Glue is MIT (see `LICENSE`). Everything under `upstream/` and the four vendored `warpd` files keep their original licenses.
 
-The glue in this repo (installer, scripts, docs, `warpd.ts`) is MIT, see [LICENSE](LICENSE). Everything under `upstream/` and the vendored files under `stack/bin/lib/warpd/` keep their original licenses and copyright - see [NOTICE.md](NOTICE.md).
+## Thanks
+
+teamchong for pxpipe (and for making warp mode small enough to lift), drona23 for claude-token-efficient, Patrick Szymkowiak for rtk. Go star those.
