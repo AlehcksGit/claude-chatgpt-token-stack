@@ -1,0 +1,29 @@
+MIT License
+
+Copyright (c) 2026 Alex Carter
+
+Applies to the integration work in this repository: install.ps1, uninstall.ps1,
+stack/bin/lib/pxpipe-ctl.ps1, stack/bin/lib/claude-px.ps1, stack/bin/*.cmd,
+stack/bin/lib/warpd/warpd.ts, docs/ and README.md.
+
+Third-party components under upstream/ and the files
+stack/bin/lib/warpd/{ca,connect,route,der}.ts are covered by their own licenses
+(MIT for pxpipe and claude-token-efficient, Apache-2.0 for rtk) - see NOTICE.md.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
