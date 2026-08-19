@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Alex Carter
+Copyright (c) 2026 Alehcks
 
 Applies to the integration work in this repository: install.ps1, uninstall.ps1,
 stack/bin/lib/pxpipe-ctl.ps1, stack/bin/lib/claude-px.ps1, stack/bin/*.cmd,
