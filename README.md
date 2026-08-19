@@ -10,7 +10,7 @@ The three projects doing the actual work:
 | 2 | How much the model talks (rules against preamble, boilerplate, sycophancy) | [claude-token-efficient](https://github.com/drona23/claude-token-efficient) | [drona23](https://github.com/drona23) | MIT |
 | 3 | Context on the wire (renders old history / tool docs to images) | [pxpipe](https://github.com/teamchong/pxpipe) | [teamchong](https://github.com/teamchong) + the claude-image-proxy contributors | MIT |
 
-Credit for the savings is all theirs. What this repo adds: an installer, a tiny daemon (`warpd`) that gets pxpipe under the desktop app (which turned out to be the hard part), a control script, a combined rules file, and a write-up of how it fits together. Only Windows 10 tested for now, because that is what it was built for/on.
+Credit for the savings is all theirs. What this repo adds: an installer, a tiny daemon (`warpd`) that gets pxpipe under the desktop app (which turned out to be the hard part), a control script, a combined rules file, and a write-up of how it fits together. Only Windows 10 tested for now, because that is what it was built for/on; there's a bash port for Linux/macOS that has had much less mileage.
 
 What it did on the machine it was built on (Windows 10, Claude Code 2.1.222 CLI / 2.1.229 desktop engine, Node 24, rtk 0.45.0, pxpipe 0.13.1):
 
@@ -32,7 +32,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 Then restart the Claude desktop app and/or open a new terminal. That's it.
 
-Flags if you want less: `-SkipRtk`, `-SkipPxpipe`, `-NoDesktop` (rules + rtk + scripts, but leave the desktop app alone), `-NoHook` (skip the rtk hook), `-PxpipeVersion x.y.z`.
+Flags if you want less: `-SkipRtk`, `-SkipPxpipe`, `-NoDesktop` (rules + rtk + scripts, but leave the desktop app alone), `-NoHook` (skip the rtk hook), `-PxpipeVersion x.y.z`. `-Profile compressed|coding|analysis|agents` swaps in one of the upstream rules profiles instead of the default.
+
+Linux / macOS (lightly tested, from Git Bash on the same box): `bash install.sh` does the same job (brew/curl for rtk, npm for pxpipe, `~/.local/bin/pxpipe-ctl.sh` + `claude-px`), same flags in `--kebab-case`.
 
 ## What the installer actually does
 
@@ -53,15 +55,21 @@ Nothing machine-wide changes: no system proxy, no cert in the Windows store, no 
 Just use Claude like before. Things to poke at:
 
 ```
-pxpipe-ctl status        who's running, always-on state
+pxpipe-ctl status        who's running, always-on state, tokens saved (24h / 7d / all), autostart
+pxpipe-ctl doctor        health check of all three layers; -Fix repairs what it can
 pxpipe-ctl dashboard     opens http://127.0.0.1:47821/  (live requests, saved %, images)
-pxpipe stats             offline numbers from ~/.pxpipe/events.jsonl
 rtk gain                 rtk's savings ledger; --history for per-command
 pxpipe-ctl desktop-off   turn the always-on routing off (settings.json edit, restart the app)
-pxpipe-ctl start         after a reboot if a session complains it can't reach the API
+pxpipe-ctl restart       if a session complains it can't reach the API (also happens on its own: warpd fails open and restarts pxpipe)
+pxpipe-ctl update        npm update pxpipe + winget upgrade rtk, restart
+pxpipe-ctl clean         drop rotated logs, trim events.jsonl to 30 days
+pxpipe-ctl config        list/get/set/unset PXPIPE_* knobs in ~/.pxpipe/daemon.env
+pxpipe-ctl autostart on  start warpd+pxpipe at logon (scheduled task) so the first session isn't slow
 ```
 
 `claude-px` still exists (`pxpipe warp -- claude` with a dashboard hint) but with always-on you don't really need it.
+
+Failure mode: if pxpipe dies, warpd notices and passes requests straight to Anthropic (uncompressed) while it restarts pxpipe with backoff. If warpd itself dies, the app can't reach the API until `pxpipe-ctl start` (any new session runs that automatically via the SessionStart hook).
 
 ## Is it working?
 
@@ -88,11 +96,11 @@ Backups the installer left: `~/.claude/settings.json.pre-pxpipe.bak`, `~/.claude
 ## What's where
 
 ```
-install.ps1 / uninstall.ps1
+install.ps1 / uninstall.ps1   Windows;  install.sh  Linux/macOS
 stack/CLAUDE.md          global rules (upstream's universal file + condensed coding profile + @RTK.md)
 stack/RTK.md             rtk's cheat-sheet for the model (what rtk init generates)
-stack/bin/               pxpipe-ctl, claude-px (.cmd + lib/*.ps1)
-stack/bin/lib/warpd/     fixed-port CONNECT proxy: 4 files vendored from pxpipe + a 60-line wrapper
+stack/bin/               pxpipe-ctl, claude-px (.cmd + lib/*.ps1), pxpipe-ctl.sh (bash port)
+stack/bin/lib/warpd/     fixed-port CONNECT proxy: 4 files vendored from pxpipe + the warpd.ts wrapper (fail-open, supervises pxpipe, /healthz)
 docs/HOW-IT-WORKS.md     the long version, including the desktop-app detour
 upstream/                full source: pxpipe (main, 0.13.1), claude-token-efficient (main), rtk (develop) + build notes
 NOTICE.md                who wrote what and under which license

@@ -22,6 +22,7 @@ Step "Always-on routing off + daemons stopped"
 $ctl = Join-Path $Bin "lib\pxpipe-ctl.ps1"
 if (Test-Path $ctl) {
   & $ctl desktop-off
+  & $ctl autostart off
   & $ctl stop
 } else { Write-Host "  pxpipe-ctl not present, skipping" }
 
@@ -47,8 +48,11 @@ if (Test-Path $Settings) {
 Step "Rule files restored"
 foreach ($f in "CLAUDE.md","RTK.md") {
   $dst = Join-Path $ClaudeDir $f; $bak = "$dst.pre-token-stack.bak"; $ours = Join-Path $Repo "stack\$f"
+  # a -Profile install stages its CLAUDE.md in ~\.claude\token-stack\CLAUDE.<profile>.md; treat those as ours too
+  $staged = @(Get-ChildItem (Join-Path $ClaudeDir "token-stack") -Filter "CLAUDE.*.md" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  $isOurs = (SameFile $dst $ours) -or (@($staged | Where-Object { SameFile $dst $_ }).Count -gt 0)
   if (Test-Path $bak) { Move-Item $bak $dst -Force; Write-Host "  $f restored from backup" }
-  elseif (SameFile $dst $ours) { Remove-Item $dst; Write-Host "  $f removed (was the stack's unmodified copy)" }
+  elseif ($isOurs) { Remove-Item $dst; Write-Host "  $f removed (was the stack's unmodified copy)" }
   elseif (Test-Path $dst) { Write-Host "  $f left in place (modified locally, no backup to restore)" }
 }
 Remove-Item (Join-Path $ClaudeDir "token-stack") -Recurse -Force -ErrorAction SilentlyContinue

@@ -39,7 +39,7 @@ Three different parts of the bill: rtk shrinks what tools dump into the context,
 - `## Output`, `## Code`, `## Review / Debug` are upstream's `profiles/CLAUDE.coding.md`, condensed - Output, Code, Review, Debugging and Simple Formatting folded together, a few lines dropped.
 - `## Override` ("explicit user instructions always win") and the `@RTK.md` line at the end are ours.
 
-Project-level `CLAUDE.md` files still stack on top; this only swaps the *global* one (old one saved as `CLAUDE.md.pre-token-stack.bak`). Other upstream profiles live in `upstream/claude-token-efficient/profiles/` - `compressed` is the aggressive one (upstream measured -62% output tokens on Opus) but drops the fabrication guards.
+Project-level `CLAUDE.md` files still stack on top; this only swaps the *global* one (old one saved as `CLAUDE.md.pre-token-stack.bak`). Other upstream profiles live in `upstream/claude-token-efficient/profiles/` - `compressed` is the aggressive one (upstream measured -62% output tokens on Opus) but drops the fabrication guards. `install.ps1 -Profile compressed|coding|analysis|agents` (or `install.sh --profile ...`) installs one of those verbatim plus the `@RTK.md` line, staged under `~/.claude/token-stack/`, instead of our combined default.
 
 Checking it took: `claude -p "quote the first line of your global CLAUDE.md"`.
 
@@ -102,10 +102,17 @@ Two ways to feed it:
 |---|---|
 | `start [-Quiet]` | start pxpipe and warpd if not listening (what the SessionStart hook calls) |
 | `stop` / `restart` | stop / restart both |
-| `status` | daemons, PIDs, dashboard URL, always-on state |
+| `status` | daemons, PIDs, dashboard URL, always-on state, savings (24h / 7d / all-time from `events.jsonl` + `rtk gain`), autostart state |
+| `doctor [-Fix]` | checks node/rtk/pxpipe/warpd/hook/rules/CA/settings; `-Fix` applies safe repairs (start daemons, re-run desktop-on, `rtk init -g`) |
 | `desktop-on` / `desktop-off` | write / remove the env block + SessionStart hook in settings.json (UTF-8, no BOM, backup kept) |
 | `dashboard` | open http://127.0.0.1:47821/ |
-| `logs` | tail `proxy.log` |
+| `logs [-All]` | tail `proxy.log` + warpd logs; logs rotate on every start (`.1 .2 .3` kept) |
+| `clean [-All]` | drop rotated logs, trim `events.jsonl` to 30 days (`-All`: delete it), clear >5 MB logs while stopped |
+| `update` | `npm i -g pxpipe-proxy@latest` + `winget upgrade rtk-ai.rtk`, then restart |
+| `config list/get/set/unset` | persistent daemon env in `~/.pxpipe/daemon.env`, applied to pxpipe + warpd on start (e.g. `config set PXPIPE_MODELS off`) |
+| `autostart on/off/status` | Windows logon task via `schtasks` (`pxpipe-ctl.sh`: systemd user unit or launchd agent) |
+
+warpd itself (`stack/bin/lib/warpd/warpd.ts`) supervises pxpipe: if `/healthz` on 47821 stops answering it restarts pxpipe with backoff (1 s -> 30 s) and, while pxpipe is down, forwards `/v1/messages` straight to `api.anthropic.com` uncompressed rather than failing the request. `PXPIPE_WARP_PORT`, `PXPIPE_PORT`, `PXPIPE_CLI`, `PXPIPE_LOG_OUT/ERR` are the knobs.
 
 ## 7. Numbers from this box
 
@@ -116,7 +123,6 @@ Two ways to feed it:
 ## 8. Rough edges
 
 - rtk covers a fixed list of commands; the rest pass through unfiltered (`rtk gain --history` shows 0% for those).
-- warpd is only tested on Windows. The TypeScript is portable, the control script is PowerShell.
-- No Linux/macOS installer. There, `pxpipe warp -- claude` or the same settings.json env trick with a small warpd wrapper should work identically; not tried.
+- warpd is only battle-tested on Windows. The TypeScript is portable; `stack/bin/pxpipe-ctl.sh` + `install.sh` are the Linux/macOS port (start/stop/status/health/doctor/savings/desktop-on|off/config/autostart via systemd user unit or launchd plist). They were exercised from Git Bash on the Windows box, not on a real Linux/mac install yet.
 - pxpipe's image rendering is lossy for very old context on purpose. If a task needs exact recall of something far back, have the model re-read the source file instead of trusting its memory of the picture.
 - Built in one sitting with Claude driving; expect the odd sharp corner. Issues welcome.

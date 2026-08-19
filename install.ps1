@@ -9,6 +9,10 @@
     -SkipRtk          do not install rtk/ripgrep or its hook
     -SkipPxpipe       do not install pxpipe/warpd/scripts
     -NoDesktop        install everything but leave always-on routing OFF (enable later: pxpipe-ctl desktop-on)
+    -Profile <name>   which CLAUDE.md rules to install (re-run with -SkipRtk -SkipPxpipe to switch later):
+                        default     stack\CLAUDE.md - the coding profile Alehcks uses (short, verify-before-assert)
+                        compressed  upstream CLAUDE.compressed.md - terse output, biggest output-token cut
+                        coding | analysis | agents   the other upstream profiles, unchanged, + @RTK.md
     -PxpipeVersion    npm version of pxpipe-proxy to install (default 0.13.1, the vendored one)
 
   Everything lands under your user profile:
@@ -23,6 +27,8 @@ param(
   [switch]$SkipRtk,
   [switch]$SkipPxpipe,
   [switch]$NoDesktop,
+  [ValidateSet("default","compressed","coding","analysis","agents")]
+  [string]$Profile = "default",
   [string]$PxpipeVersion = "0.13.1"
 )
 
@@ -80,9 +86,20 @@ if (-not $SkipRtk) {
 }
 
 # ---------------------------------------------------------------- Layer 2: rules
-Step "Layer 2: claude-token-efficient rules -> ~\.claude\CLAUDE.md + RTK.md  [drona23/claude-token-efficient, MIT]"
+Step "Layer 2: claude-token-efficient rules (profile: $Profile) -> ~\.claude\CLAUDE.md + RTK.md  [drona23/claude-token-efficient, MIT]"
 New-Item -ItemType Directory -Force $ClaudeDir | Out-Null
-BackupThenCopy (Join-Path $Repo "stack\CLAUDE.md") (Join-Path $ClaudeDir "CLAUDE.md") ".pre-token-stack.bak"
+if ($Profile -eq "default") {
+  $rulesSrc = Join-Path $Repo "stack\CLAUDE.md"
+} else {
+  # upstream profile verbatim + the rtk import line, staged in ~\.claude\token-stack\ so BackupThenCopy can hash-compare it
+  $up = Join-Path $Repo "upstream\claude-token-efficient\profiles\CLAUDE.$Profile.md"
+  if (-not (Test-Path $up)) { throw "profile file missing: $up (the upstream\ folder ships with the repo zip)" }
+  New-Item -ItemType Directory -Force (Join-Path $ClaudeDir "token-stack") | Out-Null
+  $rulesSrc = Join-Path $ClaudeDir "token-stack\CLAUDE.$Profile.md"
+  $body = (Get-Content $up -Raw).TrimEnd()
+  Set-Content -Path $rulesSrc -Encoding UTF8 -Value "$body`n`n@RTK.md`n"
+}
+BackupThenCopy $rulesSrc                           (Join-Path $ClaudeDir "CLAUDE.md") ".pre-token-stack.bak"
 BackupThenCopy (Join-Path $Repo "stack\RTK.md")    (Join-Path $ClaudeDir "RTK.md")    ".pre-token-stack.bak"
 New-Item -ItemType Directory -Force (Join-Path $ClaudeDir "token-stack") | Out-Null
 Copy-Item (Join-Path $Repo "docs\HOW-IT-WORKS.md") (Join-Path $ClaudeDir "token-stack\README.md") -Force
