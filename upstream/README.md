@@ -26,6 +26,6 @@ cd upstream\rtk
 cargo install --path .  # -> %USERPROFILE%\.cargo\bin\rtk.exe
 ```
 
-claude-token-efficient needs no build; `stack/CLAUDE.md` is derived from `claude-token-efficient/profiles/` (see `docs/HOW-IT-WORKS.md`, section 3).
+claude-token-efficient needs no build; `stack/CLAUDE.md` is its universal `CLAUDE.md` plus a condensed `profiles/CLAUDE.coding.md` (see `docs/HOW-IT-WORKS.md`, section 3).
 
 Then run `..\..\install.ps1 -SkipRtk -SkipPxpipe` (or with only one of the flags) to install just the rules, scripts, hooks and always-on routing around what you built.

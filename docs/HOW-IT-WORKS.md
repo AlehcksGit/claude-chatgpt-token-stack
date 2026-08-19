@@ -33,15 +33,13 @@ Each layer attacks a different part of the bill: rtk shrinks what tools print in
 
 ## 3. Layer 2 - claude-token-efficient rules
 
-`stack/CLAUDE.md` is claude-token-efficient's global profile with a few local edits, installed as `~/.claude/CLAUDE.md`. Local tuning vs upstream:
+`stack/CLAUDE.md` is assembled from claude-token-efficient and installed as `~/.claude/CLAUDE.md`:
 
-- explicit "no em-dashes, no emojis, plain hyphens and straight quotes; code must be copy-paste safe" (Windows terminals and PowerShell scripts do not like typographic characters)
-- "do not guess APIs, versions, flags, commit SHAs or package names - verify by reading code or docs" (the biggest real-world token sink is a wrong guess followed by a retry)
-- "read the file before modifying it; never edit blind"
-- "explicit user instructions always win"
-- `@RTK.md` include at the end so rtk's cheat-sheet rides along
+- `## Approach` = upstream's universal `CLAUDE.md`, verbatim (that is where "no emojis or em-dashes" and "do not guess APIs, versions, flags, commit SHAs" come from - the biggest real-world token sink is a wrong guess followed by a retry)
+- `## Output`, `## Code`, `## Review / Debug` = upstream `profiles/CLAUDE.coding.md`, condensed (its Output, Code, Review, Debugging and Simple Formatting sections merged, a few lines dropped)
+- `## Override` ("explicit user instructions always win") and the `@RTK.md` include line at the end are ours
 
-Project-level `CLAUDE.md` files still apply on top - this only replaces the *global* file (the installer backs up any existing one as `CLAUDE.md.pre-token-stack.bak`). Upstream's other profiles (data, writing, ops...) are in `upstream/claude-token-efficient/profiles/` if you want a different base.
+Project-level `CLAUDE.md` files still apply on top - this only replaces the *global* file (the installer backs up any existing one as `CLAUDE.md.pre-token-stack.bak`). Upstream's other profiles (compressed, analysis, agents...) are in `upstream/claude-token-efficient/profiles/` if you want a different base; the compressed one is the aggressive option (upstream measured -62% output tokens on Opus) at the cost of the fabrication guards.
 
 Verification is trivial: a fresh `claude -p "quote the first line of your global CLAUDE.md"` returns it.
 
