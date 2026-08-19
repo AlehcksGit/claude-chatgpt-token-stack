@@ -10,7 +10,7 @@ The three projects doing the actual work:
 | 2 | How much the model talks (rules against preamble, boilerplate, sycophancy) | [claude-token-efficient](https://github.com/drona23/claude-token-efficient) | [drona23](https://github.com/drona23) | MIT |
 | 3 | Context on the wire (renders old history / tool docs to images) | [pxpipe](https://github.com/teamchong/pxpipe) | [teamchong](https://github.com/teamchong) + the claude-image-proxy contributors | MIT |
 
-Credit for the savings is all theirs. What this repo adds: an installer, a tiny daemon (`warpd`) that gets pxpipe under the desktop app (which turned out to be the hard part), a control script, a combined rules file, and a write-up of how it fits together. Not affiliated with Anthropic or any of the three projects. Windows only for now, because that is what it was built on.
+Credit for the savings is all theirs. What this repo adds: an installer, a tiny daemon (`warpd`) that gets pxpipe under the desktop app (which turned out to be the hard part), a control script, a combined rules file, and a write-up of how it fits together. Only Windows 10 tested for now, because that is what it was built for/on.
 
 What it did on the machine it was built on (Windows 10, Claude Code 2.1.222 CLI / 2.1.229 desktop engine, Node 24, rtk 0.45.0, pxpipe 0.13.1):
 
@@ -20,11 +20,11 @@ What it did on the machine it was built on (Windows 10, Claude Code 2.1.222 CLI 
 
 ## Install
 
-You need: Windows 10/11, [Node.js](https://nodejs.org) 22.7+ (24 LTS is what we used), `winget` (already on Windows), and Claude Code CLI and/or the desktop app signed in.
+You need: Windows 10/11, [Node.js](https://nodejs.org) 22.7+ (24 LTS was used), `winget` (already on Windows), and Claude Code CLI and/or the desktop app signed in.
 
 1. Grab the .zip (green **Code** button -> **Download ZIP**) or `git clone`.
 2. Unzip anywhere.
-3. PowerShell in that folder:
+3. PowerShell in that folder (cd C:\<download folder>):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
