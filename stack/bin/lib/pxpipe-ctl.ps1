@@ -57,6 +57,8 @@ $HookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$Self`
 $HookMarker  = "pxpipe-ctl.ps1"
 $TaskName    = "\ClaudeTokenStack\Daemons"
 $AutostartReceipt = Join-Path $InstallState "autostart-receipt.json"
+$CleanTaskName = "\ClaudeTokenStack\Clean"
+$CleanScheduleReceipt = Join-Path $InstallState "clean-schedule-receipt.json"
 $RotateKeep  = 3
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $ClaudeReviewedModels = @('claude-fable-5','gemini-3.6-flash','gemini-3.7-flash')
@@ -326,6 +328,12 @@ function Get-AutostartXml {
   finally { $ErrorActionPreference = $old }
 }
 function Test-AutostartTask { return $null -ne (Get-AutostartXml) }
+function Get-CleanScheduleXml {
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $out = & schtasks.exe /Query /TN $CleanTaskName /XML 2>$null; if ($LASTEXITCODE -ne 0) { return $null }; return ($out -join "`n") }
+  finally { $ErrorActionPreference = $old }
+}
+function Test-CleanScheduleTask { return $null -ne (Get-CleanScheduleXml) }
 
 # ---------- daemons ----------
 function Get-ServiceRecordPath([string]$Name) {
@@ -769,6 +777,7 @@ function Show-Status {
   $sum = Savings-Summary; if ($sum) { Write-Host "  savings   : $sum" -ForegroundColor Cyan }
   Write-Host "  monitor   : $(if ($monUp) {"RUNNING + VERIFIED  $MonUrl/  (Claude + Codex Work telemetry)"} else {"off or unverified (pxpipe-ctl monitor)"})" -ForegroundColor DarkGray
   Write-Host "  autostart : $(if (Test-AutostartTask) {'logon task ON'} else {'off (pxpipe-ctl autostart on)'})" -ForegroundColor DarkGray
+  Write-Host "  autoclean : $(if (Test-CleanScheduleTask) {'daily 04:00 task ON'} else {'off (pxpipe-ctl clean-schedule on)'})" -ForegroundColor DarkGray
   Write-Host "  dashboard : $Base/     logs: pxpipe-ctl logs     doctor: pxpipe-ctl doctor" -ForegroundColor DarkGray
   Write-Host ""
 }
@@ -844,6 +853,8 @@ function Run-Doctor {
   Check "claude-px launcher" (Test-Path (Join-Path $binDir "claude-px.cmd")) (Join-Path $binDir "claude-px.cmd") "re-run install.ps1" $null $true
   $taskOn = Test-AutostartTask
   Check "logon autostart task" $taskOn $(if ($taskOn) { "on" } else { "off (optional; the SessionStart hook also starts the daemons)" }) "pxpipe-ctl autostart on" $null $true
+  $cleanTaskOn = Test-CleanScheduleTask
+  Check "scheduled clean task" $cleanTaskOn $(if ($cleanTaskOn) { "daily 04:00 (trims events.jsonl + rotated logs)" } else { "off (optional; pxpipe-ctl clean-schedule on, or run clean by hand)" }) "pxpipe-ctl clean-schedule on" $null $true
   $monRecord = Read-ServiceRecord 'monitor'; $monUp = $null -ne $monRecord -and (Test-ServiceHealth 'monitor' $monRecord)
   Check "monitor :$MonPort" $monUp $(if ($monUp) { $MonUrl } else { "off (optional; pxpipe-ctl monitor)" }) "pxpipe-ctl monitor" { Start-Monitor } $true
 
@@ -886,7 +897,7 @@ function Run-Config {
     "list"  { if ($Cfg.Count -eq 0) { Say "no daemon config ($DaemonEnv). Common keys:" "Gray" } else { foreach ($k in $Cfg.Keys) { Write-Host "  $k=$($Cfg[$k])" } ; Say "" }
               Say "  PXPIPE_MODELS       comma list of model bases pxpipe images (default: claude-fable-5,gemini-3.6-flash,gemini-3.7-flash; 'off' disables imaging)" "DarkGray"
               Say "  PXPIPE_DISABLE      1 = passthrough mode, still logs usage + baselines (A/B / troubleshooting)" "DarkGray"
-              Say "  PXPIPE_MAX_REQUEST_BYTES  request size cap in bytes" "DarkGray"
+              Say "  PXPIPE_MAX_REQUEST_BYTES  inbound request cap in bytes (default 16 MiB / 16777216). Raise only if a real client legitimately sends larger requests; a too-small cap makes pxpipe reject big requests with HTTP 413." "DarkGray"
               Say "  PXPIPE_LOG          events.jsonl path; PXPIPE_PORT / PXPIPE_WARP_PORT move the daemons" "DarkGray"
               Say "  PXPIPE_MONITOR_PORT / NCC_DASHBOARD_PORT move the two read-only dashboard listeners" "DarkGray"
               Say "  usage: pxpipe-ctl config set KEY VALUE | unset KEY | get KEY   (then: pxpipe-ctl restart)" "DarkGray" }
@@ -992,6 +1003,45 @@ function Run-Autostart {
     default { Say "autostart: $(if (Test-AutostartTask) {'ON'} else {'off'})  (pxpipe-ctl autostart on|off)" "Gray" }
   }
 }
+function Run-CleanSchedule {
+  $sub = if ($Arg1) { $Arg1.ToLower() } else { "status" }
+  switch ($sub) {
+    "on"  {
+            $existingXml = Get-CleanScheduleXml
+            $claim = Read-Json $CleanScheduleReceipt
+            if ($null -ne $existingXml) {
+              if ($null -eq $claim) { throw "Scheduled-clean task '$CleanTaskName' already exists without a Token Stack ownership receipt; it was preserved." }
+              $currentHash = Get-TextSha $existingXml
+              if ($currentHash -ceq [string]$claim.xmlHash) { Say "clean-schedule: owned task already enabled" "DarkGray"; return }
+              throw "Scheduled-clean task '$CleanTaskName' changed after creation; it was preserved."
+            }
+            if ($null -ne $claim) { throw 'Scheduled-clean ownership receipt exists but its task is missing; remove the stale receipt only after review.' }
+            $tr = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Self`" clean -Quiet"
+            $code = -1; $old = $ErrorActionPreference; $ErrorActionPreference='Continue'
+            try { & schtasks.exe /Create /TN $CleanTaskName /SC DAILY /ST 04:00 /RL LIMITED /TR $tr 2>$null | Out-Null; $code=$LASTEXITCODE }
+            finally { $ErrorActionPreference=$old }
+            if ($code -ne 0) { throw "schtasks failed (exit $code)" }
+            $createdXml = Get-CleanScheduleXml
+            if ($null -eq $createdXml) { throw 'Scheduled-clean task creation could not be verified.' }
+            $newClaim = [pscustomobject][ordered]@{ schemaVersion=1; taskName=$CleanTaskName; controller=[IO.Path]::GetFullPath($Self); xmlHash=(Get-TextSha $createdXml); createdAtUtc=[DateTime]::UtcNow.ToString('o') }
+            Write-JsonAtomic $CleanScheduleReceipt $newClaim
+            Say "clean-schedule: owned daily task '$CleanTaskName' created (04:00, trims events.jsonl to 30 days + drops rotated logs)" "Green" }
+    "off" {
+            $claim = Read-Json $CleanScheduleReceipt
+            if ($null -eq $claim) { Say 'clean-schedule: no ownership receipt; no task was deleted' 'Yellow'; return }
+            if ([string]$claim.taskName -cne $CleanTaskName -or -not ([IO.Path]::GetFullPath([string]$claim.controller)).Equals([IO.Path]::GetFullPath($Self), [StringComparison]::OrdinalIgnoreCase)) { throw 'Scheduled-clean receipt is invalid; no task was deleted.' }
+            $xml = Get-CleanScheduleXml
+            if ($null -eq $xml) { Remove-Item -LiteralPath $CleanScheduleReceipt -Force; Say 'clean-schedule: task already absent; stale ownership receipt removed' 'DarkGray'; return }
+            if ((Get-TextSha $xml) -cne [string]$claim.xmlHash) { throw "Scheduled-clean task '$CleanTaskName' was modified later; it was preserved." }
+            $code = -1; $old=$ErrorActionPreference; $ErrorActionPreference='Continue'
+            try { & schtasks.exe /Delete /TN $CleanTaskName /F 2>$null | Out-Null; $code=$LASTEXITCODE }
+            finally { $ErrorActionPreference=$old }
+            if ($code -ne 0 -or $null -ne (Get-CleanScheduleXml)) { throw 'Owned scheduled-clean task deletion could not be verified.' }
+            Remove-Item -LiteralPath $CleanScheduleReceipt -Force
+            Say "clean-schedule: owned daily task removed" "Yellow" }
+    default { Say "clean-schedule: $(if (Test-CleanScheduleTask) {'ON (daily 04:00)'} else {'off'})  (pxpipe-ctl clean-schedule on|off)" "Gray" }
+  }
+}
 function Show-Help {
   Write-Host @"
 
@@ -1010,6 +1060,7 @@ pxpipe-ctl - claude-token-stack daemon control
   models all|off|reset        all Claude-family models | passthrough | reviewed default
   config list|get|set|unset   persistent daemon env in $DaemonEnv (e.g. config set PXPIPE_MODELS off)
   autostart on|off|status     Windows logon task so the daemons are up before the first session
+  clean-schedule on|off|status  daily 04:00 task that runs 'clean' (trim events.jsonl to 30 days, drop rotated logs)
   setup                       the question-driven manager: what is installed + where, add/remove pieces, chat preferences
 
 Panic switch: pxpipe-ctl desktop-off  (then restart the desktop app)   Docs: docs\HOW-IT-WORKS.md
@@ -1018,7 +1069,7 @@ Panic switch: pxpipe-ctl desktop-off  (then restart the desktop app)   Docs: doc
 
 # ---------- dispatch ----------
 $commandName = $Cmd.ToLowerInvariant()
-$mutating = $commandName -in @('start','stop','restart','desktop-on','desktop-off','rtk-hook-on','rtk-hook-off','clean','update','autostart','monitor') -or
+$mutating = $commandName -in @('start','stop','restart','desktop-on','desktop-off','rtk-hook-on','rtk-hook-off','clean','clean-schedule','update','autostart','monitor') -or
   ($commandName -eq 'models' -and "$Arg1".ToLowerInvariant() -notin @('', 'show')) -or
   ($commandName -eq 'config' -and "$Arg1".ToLowerInvariant() -in @('set','unset')) -or
   ($commandName -eq 'doctor' -and $Fix)
@@ -1054,6 +1105,7 @@ switch ($commandName) {
   "models"      { Run-Models }
   "config"      { Run-Config }
   "autostart"   { Run-Autostart }
+  "clean-schedule" { Run-CleanSchedule }
   "setup"       {
     # install.ps1 stages a copy of the repo here so this works after the downloaded zip is gone
     $setup = Join-Path $env:USERPROFILE ".claude\token-stack\src\setup.ps1"

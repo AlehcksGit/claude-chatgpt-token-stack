@@ -4,6 +4,30 @@ All notable changes are documented here. This project uses semantic
 versioning for the integration layer; vendored projects keep their own
 versions and provenance.
 
+## Unreleased
+
+### Added
+
+- `pxpipe-ctl clean-schedule on|off|status`: a receipt-owned Windows scheduled
+  task (`\ClaudeTokenStack\Clean`, daily 04:00, `/RL LIMITED`) that runs the
+  existing `clean` command so `events.jsonl` and rotated logs self-trim over
+  time. `on` records a SHA-sealed ownership receipt; `off` deletes the task only
+  when that receipt still matches the live task XML, so a foreign or
+  later-edited task is preserved. `status`, `pxpipe-ctl status`, and
+  `pxpipe-ctl doctor` (warn-only) report whether the task is present.
+- The installer enables `clean-schedule` best-effort after `desktop-on`
+  (non-fatal if policy blocks `schtasks`), and `uninstall` removes the task and
+  receipt through the controller; full rollback refuses to finalize while the
+  receipt remains.
+
+### Documented
+
+- `PXPIPE_MAX_REQUEST_BYTES` (already an allowed `pxpipe-ctl config` daemon key)
+  now documents its secure default (16 MiB / 16777216 bytes) and notes that a
+  too-small cap makes pxpipe reject oversized requests with HTTP 413. The
+  default is unchanged; raise it only if a real client legitimately sends larger
+  requests.
+
 ## 0.6.2 - 2026-08-21
 
 ### Added
