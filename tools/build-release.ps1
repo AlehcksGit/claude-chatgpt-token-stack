@@ -252,7 +252,7 @@ $sbom = [pscustomobject][ordered]@{
       name = 'claude-chatgpt-token-stack'
       version = $version
       licenses = @([pscustomobject][ordered]@{ license=[pscustomobject][ordered]@{ id='MIT' } })
-      externalReferences = @([pscustomobject][ordered]@{ type='vcs'; url='https://github.com/alexxmdsxcarter/claude-chatgpt-token-stack' })
+      externalReferences = @([pscustomobject][ordered]@{ type='vcs'; url='https://github.com/AlehcksGit/claude-chatgpt-token-stack' })
     }
   }
   components = @($sourceComponents) + @($runtimeComponents) + @($sbomFiles)

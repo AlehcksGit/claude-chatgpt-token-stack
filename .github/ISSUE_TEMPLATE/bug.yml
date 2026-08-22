@@ -17,7 +17,7 @@ body:
     id: version
     attributes:
       label: Release version
-      placeholder: 0.2.0
+      placeholder: 0.6.2
     validations:
       required: true
   - type: textarea
