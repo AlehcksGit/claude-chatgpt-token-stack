@@ -465,6 +465,8 @@ try{
     $env:USERPROFILE=$TargetHome
     if(-not$SkipRtk-and-not$NoHook){& $Controller rtk-hook-on -Quiet -InternalLockHeld}
     if(-not$SkipPxpipe-and-not$NoDesktop){& (Get-AllowlistedTarget 'launcher-pxpipe-ps1') desktop-on -Quiet -InternalLockHeld}
+    # Best-effort: schedule the daily receipt-owned 'clean' task so events.jsonl and rotated logs self-trim. Never fatal (policy can block schtasks); removed by uninstall.
+    if(-not$SkipPxpipe-and-not$NoDesktop){try{& (Get-AllowlistedTarget 'launcher-pxpipe-ps1') clean-schedule on -Quiet -InternalLockHeld}catch{Write-Warning "Scheduled cleanup task was not created (non-fatal): $($_.Exception.Message)"}}
   }finally{$env:USERPROFILE=$oldHome}
 
   $receipt.inProgress=$false;$receipt.phase='complete';$receipt.updatedAtUtc=[DateTime]::UtcNow.ToString('o');Write-JsonAtomic $ReceiptPath $receipt -Seal

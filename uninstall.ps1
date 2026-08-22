@@ -37,6 +37,7 @@ $LifecycleLockPath=Join-Path $StateRoot 'lifecycle.lock'
 $SettingsReceiptPath=Join-Path $StateRoot 'settings-receipt.json'
 $SettingsBaselinePath=Join-Path $BaselineRoot 'settings.json'
 $AutostartReceiptPath=Join-Path $StateRoot 'autostart-receipt.json'
+$CleanScheduleReceiptPath=Join-Path $StateRoot 'clean-schedule-receipt.json'
 $SourceController=Join-Path $Repo 'stack\bin\lib\pxpipe-ctl.ps1'
 $InstalledController=Join-Path $Bin 'lib\pxpipe-ctl.ps1'
 $Utf8NoBom=New-Object Text.UTF8Encoding($false)
@@ -443,7 +444,7 @@ function Invoke-ControllerCleanup($Receipt) {
   $priorHome=$env:USERPROFILE
   try{
     $env:USERPROFILE=$TargetHome
-    if(Doing 'pxpipe'){& $controller desktop-off -Quiet;& $controller autostart off -Quiet;& $controller stop -Quiet}
+    if(Doing 'pxpipe'){& $controller desktop-off -Quiet;& $controller autostart off -Quiet;& $controller clean-schedule off -Quiet;& $controller stop -Quiet}
     if(Doing 'rtk'){& $controller rtk-hook-off -Quiet}
     return $true
   }catch{Write-Warning "Controller cleanup failed closed: $($_.Exception.Message)";return $false}
@@ -582,7 +583,7 @@ function Remove-ExplicitTools($Receipt) {
 }
 function Finalize-FullRollback($Baseline,$Receipt) {
   if($Part -ne 'all' -or $script:ConflictCount -or $script:IncompleteCount -or @($Receipt.artifacts).Count -or $null -ne $Receipt.userPath){return $false}
-  if((Test-Path -LiteralPath $SettingsReceiptPath) -or (Test-Path -LiteralPath $AutostartReceiptPath) -or (Test-Path -LiteralPath $InstallJournalPath) -or (Test-Path -LiteralPath $UninstallJournalPath)){return $false}
+  if((Test-Path -LiteralPath $SettingsReceiptPath) -or (Test-Path -LiteralPath $AutostartReceiptPath) -or (Test-Path -LiteralPath $CleanScheduleReceiptPath) -or (Test-Path -LiteralPath $InstallJournalPath) -or (Test-Path -LiteralPath $UninstallJournalPath)){return $false}
   foreach($artifact in @($Baseline.artifacts)){
     if([string]$artifact.backup){$payload=Join-Path $BaselineRoot ([string]$artifact.backup);if(Test-Path -LiteralPath $payload){Remove-ExactState $payload $artifact}}
   }
