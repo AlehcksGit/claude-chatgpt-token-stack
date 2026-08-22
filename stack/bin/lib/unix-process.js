@@ -299,7 +299,14 @@ function readMeta(paths, role) {
   if (!stat) return null;
   if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) die(`${role} metadata permissions are too broad.`, 2);
   let meta;
-  try { meta = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { die(`${role} metadata is invalid JSON.`, 2); }
+  try { meta = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (error) {
+    // A verified supervisor removes its metadata as its final shutdown step.
+    // Treat disappearance between lstat and read as the same cleanly-stopped
+    // state as a file that was already absent; malformed content remains fatal.
+    if (error.code === 'ENOENT') return null;
+    die(`${role} metadata is invalid JSON.`, 2);
+  }
   exactKeys(meta, META_KEYS, `${role} metadata`);
   if (meta.schemaVersion !== 1 || meta.role !== role || !/^[0-9a-f]{32}$/.test(meta.nonce) || !/^[0-9a-f]{64}$/.test(meta.commandId)) {
     die(`${role} metadata identity is invalid.`, 2);

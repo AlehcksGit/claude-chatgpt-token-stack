@@ -477,8 +477,8 @@ for argument in "$@"; do [ "$argument" = '--quiet' ] || filtered+=("$argument");
 set -- "${filtered[@]}"
 
 case "$command" in
-  start) role="${1:-all}"; [ "$role" = all ] && start_all || start_role "$role" ;;
-  stop) role="${1:-all}"; [ "$role" = all ] && stop_all || stop_role "$role" ;;
+  start) role="${1:-all}"; if [ "$role" = all ]; then start_all; else start_role "$role"; fi ;;
+  stop) role="${1:-all}"; if [ "$role" = all ]; then stop_all; else stop_role "$role"; fi ;;
   restart) role="${1:-all}"; if [ "$role" = all ]; then stop_all && start_all; else stop_role "$role" && start_role "$role"; fi ;;
   status) show_status ;;
   health) health ;;
