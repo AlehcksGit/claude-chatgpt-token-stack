@@ -202,6 +202,7 @@ function linuxInfo(pid) {
   const close = statText.lastIndexOf(')');
   if (close < 0) die(`Cannot parse process stat for pid ${pid}.`, 2);
   const rest = statText.slice(close + 2).trim().split(/\s+/);
+  if (rest[0] === 'Z') die(`Process ${pid} has exited and is awaiting reap.`, 3);
   const start = `proc:${rest[19]}`;
   const cmdBytes = fs.readFileSync(`/proc/${pid}/cmdline`);
   const args = cmdBytes.toString('utf8').split('\0').filter((item) => item.length);
