@@ -5,8 +5,8 @@
     {
       "name": "pxpipe",
       "repository": "https://github.com/teamchong/pxpipe",
-      "commit": "bfaaca439eaa3acec54fd7a18f7ed27bfc509bac",
-      "upstreamVersion": "0.13.1",
+      "commit": "3425cc83b676f9df540c0adebaaaf96a11abee76",
+      "upstreamVersion": "0.13.2",
       "license": "MIT",
       "comparisonExcludes": [
         "README.md",

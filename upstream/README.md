@@ -4,7 +4,7 @@ Straight snapshots of the upstream repos as downloaded 2026-08-18, so this thing
 
 | Folder | Project | Snapshot | License |
 |---|---|---|---|
-| `pxpipe/` | https://github.com/teamchong/pxpipe | `main`, package 0.13.1 | MIT |
+| `pxpipe/` | https://github.com/teamchong/pxpipe | `main`, package 0.13.2 | MIT |
 | `claude-token-efficient/` | https://github.com/drona23/claude-token-efficient | `main` | MIT |
 | `rtk/` | https://github.com/rtk-ai/rtk | `develop`, Cargo.toml 0.42.4 (installer uses the winget release, 0.45.0) | Apache-2.0 |
 

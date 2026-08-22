@@ -213,10 +213,10 @@ $runtimeComponents = @(
   }
   [pscustomobject][ordered]@{
     type = 'application'
-    'bom-ref' = 'runtime:pxpipe-proxy@0.13.1'
+    'bom-ref' = 'runtime:pxpipe-proxy@0.13.2'
     name = 'pxpipe-proxy'
-    version = '0.13.1'
-    purl = 'pkg:npm/pxpipe-proxy@0.13.1'
+    version = '0.13.2'
+    purl = 'pkg:npm/pxpipe-proxy@0.13.2'
     scope = 'required'
     licenses = @([pscustomobject][ordered]@{ license=[pscustomobject][ordered]@{ id='MIT' } })
     properties = @(
@@ -269,7 +269,7 @@ $sbom = [pscustomobject][ordered]@{
     }
   }) + @(
     [pscustomobject][ordered]@{ ref='runtime:rtk@0.45.0'; dependsOn=@() }
-    [pscustomobject][ordered]@{ ref='runtime:pxpipe-proxy@0.13.1'; dependsOn=@('runtime:gpt-tokenizer@3.4.0') }
+    [pscustomobject][ordered]@{ ref='runtime:pxpipe-proxy@0.13.2'; dependsOn=@('runtime:gpt-tokenizer@3.4.0') }
     [pscustomobject][ordered]@{ ref='runtime:gpt-tokenizer@3.4.0'; dependsOn=@() }
   )
 }

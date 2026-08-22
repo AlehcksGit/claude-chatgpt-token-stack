@@ -41,7 +41,7 @@ const secretNames=["ANTHROPIC_API_KEY","OPENAI_API_KEY","GITHUB_TOKEN","GH_TOKEN
 fs.writeFileSync(path.join(process.env.USERPROFILE,"secret-probe.txt"),secretNames.filter(k=>process.env[k]).join(",")||"clean");
 const port=Number(process.env.PORT||process.env.PXPIPE_PORT);http.createServer((q,s)=>{s.setHeader("content-type","application/json");if(q.url==="/proxy-stats")s.end("{}");else if(q.url==="/api/stats.json")s.end("{}");else s.end(JSON.stringify({service:"pxpipe"}));}).listen(port,"127.0.0.1");
 '@
-  [IO.File]::WriteAllText($cli,$fakeCli,$utf8);[IO.File]::WriteAllText((Join-Path $packageRoot 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.1"}',$utf8)
+  [IO.File]::WriteAllText($cli,$fakeCli,$utf8);[IO.File]::WriteAllText((Join-Path $packageRoot 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.2"}',$utf8)
   $openAiSentinel=Join-Path $profile '.openai-token-stack\sentinel.txt';New-Item -ItemType Directory -Path(Split-Path -Parent $openAiSentinel)-Force|Out-Null;[IO.File]::WriteAllText($openAiSentinel,'do not touch',$utf8)
   $openAiPort=$null
   try{$openAiPort=New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,47831);$openAiPort.Start()}

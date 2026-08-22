@@ -65,9 +65,9 @@ switch ($command) {
   'root' { Write-Output $root; exit 0 }
   'prefix' { Write-Output $prefix; exit 0 }
   'install' {
-    if (@($args) -notcontains 'pxpipe-proxy@0.13.1') { Write-Error 'unpinned pxpipe install'; exit 9 }
+    if (@($args) -notcontains 'pxpipe-proxy@0.13.2') { Write-Error 'unpinned pxpipe install'; exit 9 }
     New-Item -ItemType Directory -Path (Join-Path $packageRoot 'bin') -Force | Out-Null
-    [IO.File]::WriteAllText((Join-Path $packageRoot 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.1"}',$utf8)
+    [IO.File]::WriteAllText((Join-Path $packageRoot 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.2"}',$utf8)
     [IO.File]::WriteAllText((Join-Path $packageRoot 'bin\cli.js'),'const http=require("http");const p=Number(process.env.PORT||process.env.PXPIPE_PORT);http.createServer((q,s)=>{s.setHeader("content-type","application/json");if(q.url==="/proxy-stats"||q.url==="/api/stats.json")s.end("{}");else s.end(JSON.stringify({service:"pxpipe"}))}).listen(p,"127.0.0.1");',$utf8)
     foreach($name in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){[IO.File]::WriteAllText((Join-Path $prefix $name),("owned "+$name),$utf8)}
     if($env:CTS_TEST_FAIL_AFTER_INSTALL-eq'1'){exit 37}
@@ -96,7 +96,7 @@ function New-PxpipeFixture([string]$Name) {
 try {
   $source = [IO.File]::ReadAllText($install)
   Assert-True ($source -match "\[ValidateSet\('0\.45\.0'\)\]") 'RTK parameter is not pinned to the sole allowed version 0.45.0'
-  Assert-True ($source -match "\[ValidateSet\('0\.13\.1'\)\]") 'pxpipe parameter is not pinned to the sole reviewed version 0.13.1'
+  Assert-True ($source -match "\[ValidateSet\('0\.13\.2'\)\]") 'pxpipe parameter is not pinned to the sole reviewed version 0.13.2'
   Assert-True ($source -match '\$managerIdentity\.path\) install --id rtk-ai\.rtk -e --source winget --version \$RtkVersion') 'winget install does not use the inventoried manager while pinning RTK version and official source'
   Assert-True ($source -match 'list --id rtk-ai\.rtk -e --source winget') 'RTK inventory is not constrained to the official winget source'
   Assert-True (([IO.File]::ReadAllText((Join-Path $script:RepoRoot 'uninstall.ps1'))) -match 'uninstall --id rtk-ai\.rtk -e --source winget') 'RTK removal is not constrained to the official winget source'

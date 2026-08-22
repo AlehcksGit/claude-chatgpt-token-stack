@@ -19,7 +19,7 @@ declared package during installation.
 
 - Source: https://github.com/teamchong/pxpipe
 - Commit: `bfaaca439eaa3acec54fd7a18f7ed27bfc509bac`
-- Package version: `0.13.1`
+- Package version: `0.13.2`
 - Copyright (c) 2026 claude-image-proxy contributors
 - License: MIT (`upstream/pxpipe/LICENSE`)
 

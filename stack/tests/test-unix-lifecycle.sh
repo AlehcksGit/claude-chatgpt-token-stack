@@ -76,7 +76,7 @@ const request=http.request({host:'127.0.0.1',port,method:'POST',path:'http://api
   headers:{host:'api.anthropic.com','content-type':'application/json','content-length':payload.length},timeout:2000},(response)=>{
   const chunks=[]; response.on('data',(chunk)=>chunks.push(chunk)); response.on('end',()=>{try{
     const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if(response.statusCode!==200||response.headers['x-cts-test-proxy']!=='pxpipe-0.13.1'||value.proxied!==true||
+    if(response.statusCode!==200||response.headers['x-cts-test-proxy']!=='pxpipe-0.13.2'||value.proxied!==true||
        value.path!=='/v1/messages?cts_identity=1'||value.bytes!==payload.length)process.exitCode=3;
   }catch{process.exitCode=3;}});
 });
@@ -117,7 +117,7 @@ if [ "\${1:-}" = root ] && [ "\${2:-}" = -g ]; then printf '%s\n' '$fake_global'
 exit 2
 EOF
   cat >"$fake_global/pxpipe-proxy/package.json" <<'EOF'
-{"name":"pxpipe-proxy","version":"0.13.1","bin":{"pxpipe":"bin/cli.js"}}
+{"name":"pxpipe-proxy","version":"0.13.2","bin":{"pxpipe":"bin/cli.js"}}
 EOF
   cat >"$fake_global/pxpipe-proxy/bin/cli.js" <<'EOF'
 #!/usr/bin/env node
@@ -128,7 +128,7 @@ const server = http.createServer((request, response) => {
   const chunks=[];
   request.on('data',(chunk)=>chunks.push(chunk));
   request.on('end',()=>{
-    response.writeHead(200, {'content-type':'application/json','x-cts-test-proxy':'pxpipe-0.13.1'});
+    response.writeHead(200, {'content-type':'application/json','x-cts-test-proxy':'pxpipe-0.13.2'});
     response.end(JSON.stringify({proxied:true,path:request.url,bytes:Buffer.concat(chunks).length}));
   });
 });
@@ -169,7 +169,7 @@ version_fake="$(make_fake_dependencies "$version_root")"
 node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("rtk 0.45.0","rtk 0.45.1"))' "$version_fake/rtk"
 expect_rc 1 env PATH="$version_fake:$PATH" "$REPO/install.sh" --target-home "$version_home" --no-start --no-desktop >/dev/null 2>&1
 assert_empty "$version_home"
-node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("0.13.1","0.13.2"))' "$version_root/fake-global/pxpipe-proxy/package.json"
+node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("0.13.2","0.13.3"))' "$version_root/fake-global/pxpipe-proxy/package.json"
 expect_rc 1 env PATH="$version_fake:$PATH" "$REPO/install.sh" --target-home "$version_home" --no-start --skip-rtk --no-desktop >/dev/null 2>&1
 assert_empty "$version_home"
 pass 'exact dependency version refusal before mutation'

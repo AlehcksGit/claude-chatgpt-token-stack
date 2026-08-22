@@ -460,7 +460,7 @@ function Start-ManagedService([string]$Name, [int]$ListenPort, [string]$EntryPat
   }
 }
 function Start-Proxy {
-  $cli = Get-PxpipeCli; if (-not $cli) { throw "pxpipe-proxy not found. Re-run the reviewed installer, or install the pinned package: npm install -g pxpipe-proxy@0.13.1" }
+  $cli = Get-PxpipeCli; if (-not $cli) { throw "pxpipe-proxy not found. Re-run the reviewed installer, or install the pinned package: npm install -g pxpipe-proxy@0.13.2" }
   $envs = @{ PORT="$Port"; HOST='127.0.0.1'; PXPIPE_PORT="$Port"; PXPIPE_LOG=$Events; PXPIPE_DEBUG_CAPTURE_4XX='0'; PXPIPE_DUMP_DIR=''; PXPIPE_PROVIDER=''; PXPIPE_GATEWAY_BASE_URL=''; PXPIPE_GATEWAY_HEADERS='' }
   foreach ($key in $Cfg.Keys) { if ($key -notin @('PXPIPE_WARP_PORT','PXPIPE_MONITOR_PORT')) { $envs[$key] = [string]$Cfg[$key] } }
   return Start-ManagedService 'pxpipe' $Port $cli ("`"$cli`"") $Log $LogErr $envs
@@ -815,7 +815,7 @@ function Run-Doctor {
   $nodeVersion=$null;try{$nodeVersion=[version]$nv.TrimStart('v')}catch{}
   Check "supported Node.js" ($null-ne$nodeVersion-and(Test-SupportedNodeVersion $nodeVersion)) $nv "install Node 22.7+ within 22.x, or Node 24.x, then re-run install.ps1"
   $cli = Get-PxpipeCli
-  Check "pxpipe-proxy installed" ([bool]$cli) $(if ($cli) { $cli } else { "not found under npm -g" }) "re-run install.ps1, or install exactly: npm install -g pxpipe-proxy@0.13.1"
+  Check "pxpipe-proxy installed" ([bool]$cli) $(if ($cli) { $cli } else { "not found under npm -g" }) "re-run install.ps1, or install exactly: npm install -g pxpipe-proxy@0.13.2"
   $pxRecord = Read-ServiceRecord 'pxpipe'; $pxUp = $null -ne $pxRecord -and (Test-ServiceHealth 'pxpipe' $pxRecord)
   Check "pxpipe identity + health :$Port" $pxUp $Base "pxpipe-ctl start" { Start-Proxy }
   if ($pxUp) {

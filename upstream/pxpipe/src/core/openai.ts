@@ -249,11 +249,33 @@ function configuredHistoryMaxImages(model: string): number {
   return Number.isFinite(parsed) ? Math.max(1, Math.min(100, parsed)) : fallback;
 }
 
+function countRequestImages(messages: OpenAIChatMessage[]): number {
+  let count = 0;
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (typeof part === 'object' && part !== null && 'type' in part && (part as { type?: string }).type === 'image_url') {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
 function gptHistoryOpts(
   model: string,
   o: OpenAIResolvedOptions,
   profile: ReturnType<typeof resolveGptProfile>,
+  existingImages = 0,
 ): Partial<GptHistoryOptions> {
+  const configuredMax = o.gptHistory?.maxImages ?? configuredHistoryMaxImages(model);
+  // Providers with a hard total-image cap budget against the remaining headroom
+  // (client-attached images included) instead of subtracting from the history
+  // cap, which would starve history once the request already carries images.
+  const remainingMax = profile.providerImageCap !== undefined
+    ? Math.max(0, Math.min(configuredMax, profile.providerImageCap - existingImages))
+    : Math.max(0, configuredMax - existingImages);
   return {
     ...o.gptHistory,
     reflow: o.reflow,
@@ -264,7 +286,7 @@ function gptHistoryOpts(
     cols: o.gptHistory?.cols ?? profile.stripCols,
     maxHeightPx: o.gptHistory?.maxHeightPx ?? profile.maxHeightPx,
     style: o.gptHistory?.style ?? profile.style,
-    maxImages: o.gptHistory?.maxImages ?? configuredHistoryMaxImages(model),
+    maxImages: remainingMax,
   };
 }
 
@@ -475,22 +497,26 @@ function rewriteFlatToolsForGpt(tools: unknown[] | undefined): {
   return { tools: changed ? rewritten : tools, docs: docs.join('\n\n') };
 }
 
-function openAIImagePart(img: RenderedImage): OpenAIImagePart {
+function isGpt5Family(model?: string): boolean {
+  return typeof model === 'string' && /^gpt-5/i.test(model);
+}
+
+function openAIImagePart(img: RenderedImage, model?: string): OpenAIImagePart {
   return {
     type: 'image_url',
     image_url: {
       url: `data:image/png;base64,${bytesToBase64(img.png)}`,
-      detail: 'original', // GPT-5.6 preserves submitted dimensions; older profiles retain their own cost caps.
+      detail: isGpt5Family(model) ? 'original' : 'high',
     },
   };
 }
 
 /** Build a Responses API input_image part. */
-function responsesImagePart(img: RenderedImage): ResponsesInputImagePart {
+function responsesImagePart(img: RenderedImage, model?: string): ResponsesInputImagePart {
   return {
     type: 'input_image',
     image_url: `data:image/png;base64,${bytesToBase64(img.png)}`,
-    detail: 'original', // see openAIImagePart: avoid 'high' downscale of dense text
+    detail: isGpt5Family(model) ? 'original' : 'high',
   };
 }
 
@@ -805,11 +831,16 @@ async function applyChatHistoryCollapse(
 ): Promise<boolean> {
   const profitable = (text: string, cols: number, baselineTextTokens?: number) =>
     evalOpenAIGate(req.model, text, cols, o.charsPerToken, baselineTextTokens).profitable;
+  // Count images already in the request. At the main call site the static slab
+  // images are inserted into req.messages before this runs, so walking the
+  // messages (instead of also adding info.imageCount) avoids double-counting
+  // the slab and matches the Responses path's budget math.
+  const existingImages = countRequestImages(req.messages);
   const plan = await planGptCollapse(
     chatMessagesToTurns(req.messages),
     protectedPrefix,
     profitable,
-    gptHistoryOpts(req.model, o, profile),
+    gptHistoryOpts(req.model, o, profile, existingImages),
   );
   foldGptHistory(info, req.model, plan);
   const allImages = [...plan.images, ...plan.imagesAfter];
@@ -820,10 +851,10 @@ async function applyChatHistoryCollapse(
   const outro = compactFraming ? COMPACT_HISTORY_TRANSCRIPT_OUTRO : HISTORY_TRANSCRIPT_OUTRO;
   const histFactSheet = factSheetText(plan.text, profile.factSheetFormat);
   const content: OpenAIContentPart[] = [{ type: 'text', text: intro }];
-  for (const img of plan.images) content.push(openAIImagePart(img));
+  for (const img of plan.images) content.push(openAIImagePart(img, req.model));
   if (plan.pinText !== undefined) {
     content.push({ type: 'text', text: pinnedRequestBlock(plan.pinText) });
-    for (const img of plan.imagesAfter) content.push(openAIImagePart(img));
+    for (const img of plan.imagesAfter) content.push(openAIImagePart(img, req.model));
   }
   if (histFactSheet) content.push({ type: 'text', text: histFactSheet });
   content.push({ type: 'text', text: outro });
@@ -849,10 +880,11 @@ async function applyResponsesHistoryCollapse(
 ): Promise<boolean> {
   const profitable = (text: string, cols: number, baselineTextTokens?: number) =>
     evalOpenAIGate(req.model, text, cols, o.charsPerToken, baselineTextTokens).profitable;
+  const existingImages = info.imageCount ?? 0;
   const plan = await planResponsesPairCollapse(
     inputItems,
     profitable,
-    gptHistoryOpts(req.model, o, profile),
+    gptHistoryOpts(req.model, o, profile, existingImages),
   );
   const ps = plan.pairState;
   const rc = info.responsesComposition!;
@@ -890,7 +922,7 @@ async function applyResponsesHistoryCollapse(
     const segment = plan.segments[segmentIndex]!;
     const content: ResponsesContentPart[] = [
       { type: 'input_text', text: intro },
-      ...segment.images.map(responsesImagePart),
+      ...segment.images.map((img) => responsesImagePart(img, req.model)),
     ];
     const sheet = profile.history.factSheetScope === 'combined'
       ? (segmentIndex === plan.segments.length - 1 ? combinedSheet : '')
@@ -1048,11 +1080,32 @@ export async function transformOpenAIChatCompletions(
     return { body, info };
   }
 
+  // A hard provider cap makes static-first allocation pathological on long Qwen
+  // chats: the repeated system slab consumes slots that could replace much more
+  // history. Plan against the full cap first and keep static text native when the
+  // two image sets cannot coexist.
+  if (o.collapseHistory && profile.providerImageCap !== undefined) {
+    const historyReq = structuredClone(req);
+    const historyInfo = structuredClone(info);
+    if (await applyChatHistoryCollapse(
+      historyReq, historyInfo, o, profile, firstUserIdx + 1,
+    ) && countRequestImages(historyReq.messages) + images.length > profile.providerImageCap) {
+      historyInfo.outgoingTextChars = countOutgoingTextChars(historyReq);
+      historyInfo.compressed = true;
+      return { body: new TextEncoder().encode(JSON.stringify(historyReq)), info: historyInfo };
+    }
+  }
+  if (profile.providerImageCap !== undefined &&
+      countRequestImages(req.messages) + images.length > profile.providerImageCap) {
+    info.reason = 'provider_image_cap';
+    return { body, info };
+  }
+
   const { droppedCodepoints } = accumulateRenderedImages(images, info);
   const topDropped = droppedCodepointsTop(droppedCodepoints);
   if (topDropped) info.droppedCodepointsTop = topDropped;
 
-  const imageParts: OpenAIImagePart[] = images.map(openAIImagePart);
+  const imageParts: OpenAIImagePart[] = images.map((img) => openAIImagePart(img, req.model));
   info.imageCount = images.length;
   // GPT savings basis: vision tokens the images actually cost vs the text tokens
   // the same content would have cost unproxied. req.tools is still the original
@@ -1296,7 +1349,7 @@ export async function transformOpenAIResponses(
   info.imageSourceText = renderedText.slice(0, 65_536);
   info.imageSourceTexts = images.map(() => info.imageSourceText);
 
-  const imagePartsResp: ResponsesInputImagePart[] = images.map(responsesImagePart);
+  const imagePartsResp: ResponsesInputImagePart[] = images.map((img) => responsesImagePart(img, req.model));
   const endMarker: ResponsesInputTextPart = { type: 'input_text', text: '[End of rendered GPT system/tool context.]' };
   // Verbatim fact-sheet (see src/core/factsheet.ts): exact tokens that survive OCR loss.
   const slabFactSheet = factSheetText(combinedRaw, profile.factSheetFormat);

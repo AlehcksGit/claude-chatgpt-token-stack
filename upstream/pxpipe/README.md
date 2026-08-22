@@ -22,7 +22,7 @@ This is what the model sees instead of text:
 tokens as this page. Real pipeline output; the model reads renders like this
 at 100/100 (see benchmarks).*
 
-![chart: characters a frontier context window holds, 2018–2026 — vendor text series including Grok 4.5; orange measured overlays are Fable 5 [1m] + pxpipe ~19.0M (4.8×) and Gemini 3.6 Flash + pxpipe ~21.3M (5.3×)](https://raw.githubusercontent.com/teamchong/pxpipe/bfaaca439eaa3acec54fd7a18f7ed27bfc509bac/docs/assets/context-window-chars.png)
+![chart: characters a frontier context window holds, 2018–2026 — vendor text series including Grok 4.5; orange measured overlays are Fable 5 [1m] + pxpipe ~19.0M (4.8×) and Gemini 3.6 Flash + pxpipe ~21.3M (5.3×)](https://raw.githubusercontent.com/teamchong/pxpipe/3425cc83b676f9df540c0adebaaaf96a11abee76/docs/assets/context-window-chars.png)
 
 *Eight years of context growth, in characters. Every text line tops out near
 ~4M chars (a 1M-token window at ~4 chars/token); **Grok 4.5** is shown as a
@@ -72,7 +72,7 @@ provider over some other base URL need a rule for it, and a rule that names a
 port matches only that port:
 
 ```bash
-pxpipe warp --route '127.0.0.1:8082/v1/*=http://127.0.0.1:47821' -- codex
+pxpipe warp --route '127.0.0.1:9090/v1/*=http://127.0.0.1:47821' -- codex
 ```
 
 ## Offline export (no proxy)
@@ -175,6 +175,7 @@ is confabulations, so lower is better.
 | `grok-4.5` | **100/100** | **97/98** | 17/18 | **0/16** | 0/15 | native 14px/84 quality suite (live profile); [quality](eval/grok-density/QUALITY_RESULTS.md), [native-sweep](eval/grok-density/native-sweep/RESULTS.md) |
 | `grok-4.6` high | **100/100** | **97/98** | 17/18 | **0/16** | 0/15 | native 14px/84, reasoning high; [quality](eval/grok-profile/QUALITY_RESULTS.md) |
 | `moonshotai/kimi-k3` | 79/100 | 84/98 | 15/18 | 1/16 | 0/15 | generic GPT profile: [quality results](eval/sol-profile/KIMI_K3_QUALITY_RESULTS.md) |
+| `qwen-3.8` (`@cf/qwen/qwen3.8-27b`) | 98/100 | 72/98 | 11/18 | **0/16** | 0/15 | prior 5×8 broad suite (0/15 hex); native 14px pilot: 8/8 exact, 0 inventions, 11/15 hex: [pilot & quality](eval/qwen-profile/QUALITY_RESULTS.md) |
 
 ### Native-profile cost check
 
@@ -225,7 +226,7 @@ chars/vision-token ÷ 4 (prose text baseline). Not a model-quality score.
 | **`claude-opus-5`** | 1M | ~4.0M | **~18.9M** | ~18.9 c/vt (resolves to Fable 5’s geometry) | **~4.7×** |
 
 Regenerate: `npx tsx scripts/gen-context-chart.ts` · [chart PNG from the pinned
-upstream commit](https://raw.githubusercontent.com/teamchong/pxpipe/bfaaca439eaa3acec54fd7a18f7ed27bfc509bac/docs/assets/context-window-chars.png).
+upstream commit](https://raw.githubusercontent.com/teamchong/pxpipe/3425cc83b676f9df540c0adebaaaf96a11abee76/docs/assets/context-window-chars.png).
 
 The older GSM8K result is omitted because its training-data contamination can
 hide image misreads; the linked arithmetic evaluations use novel numbers.

@@ -6,7 +6,7 @@ set -euo pipefail
 umask 077
 
 SUPPORTED_RTK_VERSION='0.45.0'
-SUPPORTED_PXPIPE_VERSION='0.13.1'
+SUPPORTED_PXPIPE_VERSION='0.13.2'
 PROFILE='default'
 SKIP_RTK=0
 SKIP_PXPIPE=0
@@ -33,7 +33,7 @@ Options:
 
 Dependency policy:
   RTK is never downloaded automatically. Install exactly 0.45.0 yourself or use --skip-rtk.
-  pxpipe-proxy is installed only as the pinned npm package pxpipe-proxy@0.13.1.
+  pxpipe-proxy is installed only as the pinned npm package pxpipe-proxy@0.13.2.
 EOF
 }
 

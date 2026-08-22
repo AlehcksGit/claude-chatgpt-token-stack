@@ -174,7 +174,7 @@ function Validate-Receipts($Baseline,$Receipt){
     }else{
       $fingerprint=$dependency.fingerprint
       if([string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.managerPath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.prefix-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.path-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.packagePath-cnotmatch'^[A-Za-z]:\\'){throw 'Installer-owned pxpipe provenance is invalid.'}
-      if([string]$fingerprint.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.packageHash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.version-cne'0.13.1'-or@($fingerprint.shims).Count-ne3){throw 'Installer-owned pxpipe fingerprint is invalid.'}
+      if([string]$fingerprint.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.packageHash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.version-cne'0.13.2'-or@($fingerprint.shims).Count-ne3){throw 'Installer-owned pxpipe fingerprint is invalid.'}
       $packageRoot=Split-Path -Parent ([IO.Path]::GetFullPath([string]$fingerprint.packagePath));$expectedCli=Join-Path $packageRoot 'bin\cli.js'
       if(-not([IO.Path]::GetFullPath([string]$fingerprint.path)).Equals([IO.Path]::GetFullPath($expectedCli),[StringComparison]::OrdinalIgnoreCase)){throw 'Installer-owned pxpipe paths are inconsistent.'}
       foreach($shimName in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){$shim=@($fingerprint.shims|Where-Object{[IO.Path]::GetFileName([string]$_.path)-ceq$shimName});if($shim.Count-ne1-or-not([IO.Path]::GetFullPath([string]$shim[0].path)).Equals([IO.Path]::GetFullPath((Join-Path ([string]$fingerprint.prefix) $shimName)),[StringComparison]::OrdinalIgnoreCase)-or[string]$shim[0].state.kind-cne'file'-or[string]$shim[0].state.hash-cnotmatch'^file:[0-9a-f]{64}$'){throw 'Installer-owned pxpipe shim fingerprint is invalid.'}}
@@ -290,12 +290,12 @@ function Resolve-InterruptedToolIntent($External,$Baseline) {
     return [pscustomobject]@{ok=$true;dependency=[pscustomobject][ordered]@{installedByThisInstaller=$true;requestedVersion='0.45.0';fingerprint=$fingerprint};fingerprint=$fingerprint;reason='exact RTK install post-state reconciled'}
   }
   if($name-eq'pxpipe'){
-    if($version-cne'0.13.1'){throw 'The interrupted pxpipe operation is not pinned to 0.13.1.'}
+    if($version-cne'0.13.2'){throw 'The interrupted pxpipe operation is not pinned to 0.13.2.'}
     $state=Get-PxpipePackageState;if(-not[bool]$state.known){return [pscustomobject]@{ok=$false;dependency=$null;fingerprint=$null;reason='npm pxpipe inventory is unknown or incomplete'}}
     if(-not([IO.Path]::GetFullPath([string]$state.managerPath)).Equals([IO.Path]::GetFullPath([string]$External.managerIdentity.path),[StringComparison]::OrdinalIgnoreCase)){return [pscustomobject]@{ok=$false;dependency=$null;fingerprint=$null;reason='npm inventory came from a different executable'}}
     if(-not[bool]$state.installed){if(@($state.shimStates|Where-Object{[string]$_.state.kind-cne'absent'}).Count){return [pscustomobject]@{ok=$false;dependency=$null;fingerprint=$null;reason='npm reports pxpipe absent but one or more public shims remain'}};return [pscustomobject]@{ok=$true;dependency=$null;fingerprint=$null;reason='pxpipe is absent'}}
     $fingerprint=$state.fingerprint
-    if($null-eq$fingerprint-or[string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.version-cne'0.13.1'){return [pscustomobject]@{ok=$false;dependency=$null;fingerprint=$null;reason='pxpipe post-state is not the exact 0.13.1 package'}}
+    if($null-eq$fingerprint-or[string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.version-cne'0.13.2'){return [pscustomobject]@{ok=$false;dependency=$null;fingerprint=$null;reason='pxpipe post-state is not the exact 0.13.2 package'}}
     return [pscustomobject]@{ok=$true;dependency=[pscustomobject][ordered]@{installedByThisInstaller=$true;fingerprint=$fingerprint};fingerprint=$fingerprint;reason='exact pxpipe install post-state reconciled'}
   }
   throw "Unknown interrupted tool operation: $name"

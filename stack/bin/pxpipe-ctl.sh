@@ -5,7 +5,7 @@
 # process identity (PID + start token + executable + command + launch nonce).
 set -euo pipefail
 
-SUPPORTED_PXPIPE_VERSION='0.13.1'
+SUPPORTED_PXPIPE_VERSION='0.13.2'
 OPENAI_DEFAULT_PORT='47831'
 QUIET=0
 

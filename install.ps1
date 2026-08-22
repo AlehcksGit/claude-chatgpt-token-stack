@@ -23,8 +23,8 @@ param(
   [string]$RtkVersion = '0.45.0',
   [ValidateSet('default','compressed','coding','analysis','agents')]
   [string]$Profile = 'default',
-  [ValidateSet('0.13.1')]
-  [string]$PxpipeVersion = '0.13.1',
+  [ValidateSet('0.13.2')]
+  [string]$PxpipeVersion = '0.13.2',
   [string]$TargetHome = $env:USERPROFILE
 )
 
@@ -203,7 +203,7 @@ function Assert-Receipts($Baseline,$Receipt) {
         if([string]$dependency.requestedVersion-cne'0.45.0'-or[string]$fingerprint.managerPath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.command.path-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.command.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.package.manager-cne'winget'-or[string]$fingerprint.package.source-cne'winget'-or[string]$fingerprint.package.packageId-cne'rtk-ai.rtk'-or[string]$fingerprint.package.version-cne'0.45.0'){throw 'Installer-owned RTK provenance is invalid.'}
       }else{
         $fingerprint=$dependency.fingerprint
-        if([string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.version-cne'0.13.1'-or[string]$fingerprint.managerPath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.prefix-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.path-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.packagePath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.packageHash-cnotmatch'^file:[0-9a-f]{64}$'-or@($fingerprint.shims).Count-ne3){throw 'Installer-owned pxpipe provenance is invalid.'}
+        if([string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.version-cne'0.13.2'-or[string]$fingerprint.managerPath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.prefix-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.path-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.packagePath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.packageHash-cnotmatch'^file:[0-9a-f]{64}$'-or@($fingerprint.shims).Count-ne3){throw 'Installer-owned pxpipe provenance is invalid.'}
         foreach($shimName in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){$shim=@($fingerprint.shims|Where-Object{[IO.Path]::GetFileName([string]$_.path)-ceq$shimName});if($shim.Count-ne1-or-not([IO.Path]::GetFullPath([string]$shim[0].path)).Equals([IO.Path]::GetFullPath((Join-Path ([string]$fingerprint.prefix) $shimName)),[StringComparison]::OrdinalIgnoreCase)-or[string]$shim[0].state.kind-cne'file'-or[string]$shim[0].state.hash-cnotmatch'^file:[0-9a-f]{64}$'){throw 'Installer-owned pxpipe shim provenance is invalid.'}}
       }
     }

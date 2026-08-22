@@ -54,7 +54,7 @@ function New-Fixture([string]$Name,[bool]$Preinstall) {
 $fakeNpm=@'
 $command=if($args.Count){[string]$args[0]}else{''};$utf8=New-Object Text.UTF8Encoding($false);$prefix=$env:CTS_TEST_NPM_PREFIX;$root=$env:CTS_TEST_NPM_ROOT;$package=Join-Path $root 'pxpipe-proxy'
 switch($command){
-  'install'{New-Item -ItemType Directory -Path(Join-Path $package 'bin')-Force|Out-Null;[IO.File]::WriteAllText((Join-Path $package 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.1"}',$utf8);[IO.File]::WriteAllText((Join-Path $package 'bin\cli.js'),'fixture',$utf8);foreach($n in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){[IO.File]::WriteAllText((Join-Path $prefix $n),'owned',$utf8)};exit 0}
+  'install'{New-Item -ItemType Directory -Path(Join-Path $package 'bin')-Force|Out-Null;[IO.File]::WriteAllText((Join-Path $package 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.2"}',$utf8);[IO.File]::WriteAllText((Join-Path $package 'bin\cli.js'),'fixture',$utf8);foreach($n in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){[IO.File]::WriteAllText((Join-Path $prefix $n),'owned',$utf8)};exit 0}
   'uninstall'{if(Test-Path -LiteralPath $package){Remove-Item -LiteralPath $package -Recurse -Force};foreach($n in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){$p=Join-Path $prefix $n;if(Test-Path -LiteralPath $p){Remove-Item -LiteralPath $p -Force}};exit 0}
   default{exit 8}
 }

@@ -1,12 +1,12 @@
 /**
- * warpd - a fixed-port, long-lived adaptation of pxpipe 0.13.1
+ * warpd - a fixed-port, long-lived adaptation of pxpipe 0.13.2
  * `src/warp/index.ts` (MIT; see LICENSE.pxpipe).
  *
  * pxpipe's own `warp` binds a random port and lives only as long as the one child
  * process it spawns. The Claude desktop app spawns its engine itself, so nothing can
  * wrap it - but the engine does honor HTTPS_PROXY + NODE_EXTRA_CA_CERTS. warpd runs
  * the same CONNECT proxy (ca.ts / connect.ts / route.ts / der.ts are copied from
- * pxpipe 0.13.1 src/warp with TypeScript import-suffix changes) on a stable port so
+ * pxpipe 0.13.2 src/warp with TypeScript import-suffix changes) on a stable port so
  * those two env vars can be supplied through ~/.claude/settings.json `env`, which is
  * scoped to Claude Code processes only.
  *
