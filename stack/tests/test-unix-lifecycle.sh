@@ -9,8 +9,8 @@ declare -a TEST_PIDS=()
 
 cleanup() {
   local pid
-  for pid in "${TEST_PIDS[@]}"; do kill "$pid" >/dev/null 2>&1 || true; done
-  for pid in "${TEST_PIDS[@]}"; do wait "$pid" >/dev/null 2>&1 || true; done
+  for pid in ${TEST_PIDS[@]+"${TEST_PIDS[@]}"}; do kill "$pid" >/dev/null 2>&1 || true; done
+  for pid in ${TEST_PIDS[@]+"${TEST_PIDS[@]}"}; do wait "$pid" >/dev/null 2>&1 || true; done
   case "$TEST_ROOT" in
     "${TMPDIR:-/tmp}"/cts-unix-test.*) node -e 'require("fs").rmSync(process.argv[1],{recursive:true,force:true})' "$TEST_ROOT" ;;
     *) echo "refusing unsafe test cleanup path: $TEST_ROOT" >&2 ;;
