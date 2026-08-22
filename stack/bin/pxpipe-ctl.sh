@@ -232,6 +232,7 @@ clean_env_prefix() {
   [ -n "${TMPDIR:-}" ] && CLEAN_ENV+=("TMPDIR=$TMPDIR")
   [ -n "${SYSTEMROOT:-}" ] && CLEAN_ENV+=("SYSTEMROOT=$SYSTEMROOT")
   [ -n "${WINDIR:-}" ] && CLEAN_ENV+=("WINDIR=$WINDIR")
+  return 0
 }
 
 STARTED_NEW=0

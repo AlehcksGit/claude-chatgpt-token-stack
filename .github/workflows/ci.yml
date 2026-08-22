@@ -159,7 +159,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Activate the declared package manager
-        run: corepack enable && corepack prepare pnpm@10.21.0 --activate
+        run: npm install --global pnpm@10.21.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm test

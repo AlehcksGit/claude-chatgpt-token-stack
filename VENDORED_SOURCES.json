@@ -9,6 +9,7 @@
       "upstreamVersion": "0.13.1",
       "license": "MIT",
       "comparisonExcludes": [
+        "README.md",
         "scripts/build.mjs"
       ],
       "comparisonOmittedRoots": [
@@ -26,6 +27,7 @@
         "node_modules"
       ],
       "localChanges": [
+        "README.md: point the excluded chart PNG at the immutable upstream commit for the source-only release",
         "scripts/build.mjs: use fileURLToPath for Windows build paths",
         "stack/bin/lib/warpd/{ca,connect,route,der}.ts: copied from src/warp with TypeScript import suffixes",
         "stack/bin/lib/warpd/warpd.ts: adapted from src/warp/index.ts with fixed-port, verified-process, authenticated-health, and controller-owned lifecycle changes"
