@@ -75,6 +75,7 @@
     "**/*.webp",
     "**/*.ico",
     "**/*.pdf",
+    "upstream/pxpipe/eval/grok-density/native-sweep/atlases",
     "upstream/pxpipe/eval/swe-bench/logs/**",
     "upstream/pxpipe/eval/deepswe/results/**",
     "upstream/pxpipe/eval/deepswe/results-retry/**",

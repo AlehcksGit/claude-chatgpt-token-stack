@@ -357,7 +357,14 @@ if [ "$native_os" = Linux ] || [ "$native_os" = Darwin ]; then
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_PORT "$managed_port" >/dev/null
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_WARP_PORT "$managed_warp" >/dev/null
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_MONITOR_PORT "$managed_monitor" >/dev/null
-  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start proxy --quiet || { dump_runtime_logs; fail 'managed proxy did not start'; }
+  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start proxy --quiet || {
+    dump_runtime_logs
+    set +e
+    ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" bash -x "$managed_ctl" start proxy --quiet
+    set -e
+    dump_runtime_logs
+    fail 'managed proxy did not start'
+  }
   process_helper="$managed_home/.local/bin/lib/unix-process.js"
   child_pid="$(node "$process_helper" verify-meta --home "$managed_home" --role proxy --field childPid)"
   child_start="$(node "$process_helper" verify-meta --home "$managed_home" --role proxy --field childStart)"
