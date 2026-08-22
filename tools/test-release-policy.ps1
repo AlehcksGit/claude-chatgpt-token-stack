@@ -188,8 +188,9 @@ foreach ($file in Get-ChildItem -LiteralPath $SourceRoot -Recurse -File | Where-
 }
 
 $gitIgnore = Read-Text (Join-Path $SourceRoot '.gitignore')
+$gitIgnoreLines = @($gitIgnore -split '\r?\n')
 foreach ($pattern in @('.env','*.pem','*.key','*.db','*.sqlite','*.sqlite3','auth.json','receipt.json','events.jsonl','*.zip','/rtk/')) {
-  Assert-True ($gitIgnore -match ('(?m)^' + [regex]::Escape($pattern) + '$')) ".gitignore is missing $pattern"
+  Assert-True ($gitIgnoreLines -ccontains $pattern) ".gitignore is missing $pattern"
 }
 
 Write-Host 'Release policy checks passed.'
