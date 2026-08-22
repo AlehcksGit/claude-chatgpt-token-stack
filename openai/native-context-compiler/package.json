@@ -1,0 +1,30 @@
+{
+  "name": "native-context-compiler",
+  "version": "0.6.2",
+  "private": true,
+  "type": "module",
+  "description": "Local ChatGPT Work diagnostics with native-fast defaults and optional experimental token-reduction tools.",
+  "bin": {
+    "ncc": "src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "benchmark": "node src/cli.mjs benchmark",
+    "demo": "node src/cli.mjs demo",
+    "subscription-check": "node src/cli.mjs subscription-check",
+    "live-eval-prepare": "node src/cli.mjs live-eval-prepare",
+    "live-eval": "node src/cli.mjs live-eval",
+    "hook-eval": "node scripts/probe-post-tool-use.mjs",
+    "lean": "node src/cli.mjs lean",
+    "hook": "node src/codex-hook.mjs",
+    "native-compiler": "node src/cli.mjs native-compiler --stdio",
+    "install:all": "node scripts/install-all.mjs"
+  },
+  "dependencies": {
+    "@openai/codex": "0.149.0",
+    "gpt-tokenizer": "3.4.0"
+  },
+  "engines": {
+    "node": ">=22.7"
+  }
+}

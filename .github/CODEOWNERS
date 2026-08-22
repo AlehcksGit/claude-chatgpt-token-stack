@@ -1,0 +1,9 @@
+* @alexxmdsxcarter
+/.github/ @alexxmdsxcarter
+/install*.ps1 @alexxmdsxcarter
+/uninstall*.ps1 @alexxmdsxcarter
+/install.sh @alexxmdsxcarter
+/uninstall.sh @alexxmdsxcarter
+/stack/bin/ @alexxmdsxcarter
+/openai/bin/ @alexxmdsxcarter
+/tools/ @alexxmdsxcarter

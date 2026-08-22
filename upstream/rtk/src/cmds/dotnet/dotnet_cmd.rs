@@ -9,6 +9,7 @@ use crate::core::utils::{resolved_command, truncate};
 use crate::dotnet_format_report;
 use crate::dotnet_trx;
 use anyhow::{Context, Result};
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use serde_json::Value;
@@ -618,9 +619,11 @@ fn scan_mtp_kind_in_file(path: &Path) -> MtpProjectKind {
                 );
             }
             Ok(Event::Text(e)) if inside_mtp_element => {
-                if let Ok(text) = e.unescape() {
-                    if text.trim().eq_ignore_ascii_case("true") {
-                        return MtpProjectKind::VsTestBridge;
+                if let Ok(decoded) = e.decode() {
+                    if let Ok(text) = unescape(&decoded) {
+                        if text.trim().eq_ignore_ascii_case("true") {
+                            return MtpProjectKind::VsTestBridge;
+                        }
                     }
                 }
             }

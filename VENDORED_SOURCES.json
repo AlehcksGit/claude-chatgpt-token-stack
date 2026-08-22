@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "generatedForRelease": "0.6.2",
+  "sources": [
+    {
+      "name": "pxpipe",
+      "repository": "https://github.com/teamchong/pxpipe",
+      "commit": "bfaaca439eaa3acec54fd7a18f7ed27bfc509bac",
+      "upstreamVersion": "0.13.1",
+      "license": "MIT",
+      "comparisonExcludes": [
+        "scripts/build.mjs"
+      ],
+      "comparisonOmittedRoots": [
+        "dist",
+        "eval/ab/guards-3arm/work",
+        "eval/deepswe/failed-authexpiry",
+        "eval/deepswe/results",
+        "eval/deepswe/results-retry",
+        "eval/deepswe/results-retry2",
+        "eval/deepswe/results-retry3",
+        "eval/gist-recall/work",
+        "eval/gist-recall/work2",
+        "eval/gist-recall/work3",
+        "eval/swe-bench/logs",
+        "node_modules"
+      ],
+      "localChanges": [
+        "scripts/build.mjs: use fileURLToPath for Windows build paths",
+        "stack/bin/lib/warpd/{ca,connect,route,der}.ts: copied from src/warp with TypeScript import suffixes",
+        "stack/bin/lib/warpd/warpd.ts: adapted from src/warp/index.ts with fixed-port, verified-process, authenticated-health, and controller-owned lifecycle changes"
+      ]
+    },
+    {
+      "name": "claude-token-efficient",
+      "repository": "https://github.com/drona23/claude-token-efficient",
+      "commit": "0d30a6db75af983b8ababf585f28faefdfc87895",
+      "license": "MIT",
+      "comparisonExcludes": [
+        ".claude/SECURITY-NOTE.md",
+        ".claude/settings.json",
+        "examples/settings.precompact-auto-commit.json.disabled"
+      ],
+      "comparisonOmittedRoots": [],
+      "localChanges": [
+        "The repository-level PreCompact auto-commit settings file is moved to an inert .disabled example",
+        "Provider-neutral excerpts are identified in NOTICE.md and retained only for Claude documentation"
+      ]
+    },
+    {
+      "name": "rtk",
+      "repository": "https://github.com/rtk-ai/rtk",
+      "commit": "ba7a9ce0d92a46f2458b82b1fcdd000f887f651a",
+      "upstreamVersion": "0.42.4",
+      "license": "Apache-2.0",
+      "comparisonExcludes": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "src/cmds/dotnet/dotnet_cmd.rs",
+        "src/cmds/dotnet/dotnet_trx.rs"
+      ],
+      "comparisonOmittedRoots": [
+        "target"
+      ],
+      "localChanges": [
+        "quick-xml updated from 0.37.5 to 0.41.0 with the required API migration",
+        "anyhow updated to 1.0.103 and crossbeam-epoch updated to 0.9.20 in Cargo.lock"
+      ]
+    }
+  ]
+}

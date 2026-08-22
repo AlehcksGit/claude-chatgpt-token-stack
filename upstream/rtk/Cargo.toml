@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-anyhow = "1.0"
+anyhow = "1.0.103"
 # Console code page decoding for child-process output. Kept off the
 # cfg(windows) target so the mapping and the incremental UTF-8 walk stay
 # compiled — and unit-tested — on every platform; only the code page *lookup*
@@ -38,7 +38,7 @@ sha2 = "0.10"
 ureq = "2"
 getrandom = "0.4"
 flate2 = "1.0"
-quick-xml = "0.37"
+quick-xml = "0.41"
 which = "8"
 automod = "1"
 

@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible problem without including credentials or private request content.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste API keys, auth files, receipts, request bodies, or private proxy logs. Use the Security tab for vulnerabilities.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options: [Claude Code, Claude desktop, Codex desktop or CLI, ChatGPT, Installer or uninstaller, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Release version
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction
+      description: Use a disposable profile and fake credentials where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true

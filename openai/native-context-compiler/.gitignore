@@ -1,0 +1,6 @@
+node_modules/
+.context-vault/
+coverage/
+benchmark-results/
+outputs/
+*.tgz
