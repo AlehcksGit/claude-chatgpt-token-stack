@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Parse and run isolated lifecycle tests
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $owned = @(
@@ -53,7 +53,11 @@ jobs:
             $tests += @(Get-ChildItem -LiteralPath 'tests/claude-windows' -File -Filter 'test-*.ps1' |
               Where-Object Name -ne 'test-cross-engine.ps1' | ForEach-Object FullName)
           }
-          $testHost = (Get-Process -Id $PID).Path
+          $testHost = if ('${{ matrix.shell }}' -eq 'powershell') {
+            "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe"
+          } else {
+            (Get-Command pwsh).Source
+          }
           foreach ($test in $tests) {
             $testArgs = @('-NoProfile')
             if ($PSVersionTable.PSEdition -ne 'Core') { $testArgs += @('-ExecutionPolicy','Bypass') }
@@ -209,13 +213,15 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          $archiveRoot = "claude-chatgpt-token-stack-$version"
           foreach ($zipPath in Get-ChildItem "$env:RUNNER_TEMP\release-a" -Filter '*.zip') {
             $zip = [IO.Compression.ZipFile]::OpenRead($zipPath.FullName)
             try {
               foreach ($entry in $zip.Entries) {
                 if ($entry.FullName -match '(^|/)\.\.(/|$)' -or $entry.FullName.StartsWith('/') -or $entry.FullName.Contains('\')) { throw "Unsafe archive entry: $($entry.FullName)" }
               }
-              foreach ($required in @('claude-chatgpt-token-stack-0.3.0/LICENSE','claude-chatgpt-token-stack-0.3.0/openai/native-context-compiler/package.json')) {
+              foreach ($required in @("$archiveRoot/LICENSE","$archiveRoot/openai/native-context-compiler/package.json")) {
                 if (-not @($zip.Entries | Where-Object FullName -CEQ $required)) { throw "Project archive is missing $required" }
               }
             } finally { $zip.Dispose() }
