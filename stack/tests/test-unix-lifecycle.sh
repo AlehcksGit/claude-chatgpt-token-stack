@@ -21,6 +21,14 @@ trap cleanup EXIT INT TERM
 pass_count=0
 pass() { pass_count=$((pass_count + 1)); printf 'ok %d - %s\n' "$pass_count" "$1"; }
 fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
+dump_runtime_logs() {
+  local file
+  for file in "$managed_home/.claude-token-stack/runtime/logs/"*.log; do
+    [ -f "$file" ] || continue
+    printf '%s\n' "--- $file ---" >&2
+    sed -n '1,200p' "$file" >&2
+  done
+}
 expect_rc() {
   local expected="$1"; shift
   set +e
@@ -349,7 +357,7 @@ if [ "$native_os" = Linux ] || [ "$native_os" = Darwin ]; then
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_PORT "$managed_port" >/dev/null
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_WARP_PORT "$managed_warp" >/dev/null
   PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" config set PXPIPE_MONITOR_PORT "$managed_monitor" >/dev/null
-  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start proxy --quiet
+  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start proxy --quiet || { dump_runtime_logs; fail 'managed proxy did not start'; }
   process_helper="$managed_home/.local/bin/lib/unix-process.js"
   child_pid="$(node "$process_helper" verify-meta --home "$managed_home" --role proxy --field childPid)"
   child_start="$(node "$process_helper" verify-meta --home "$managed_home" --role proxy --field childStart)"
@@ -359,7 +367,7 @@ if [ "$native_os" = Linux ] || [ "$native_os" = Darwin ]; then
   else
     if /bin/ps eww -p "$child_pid" -o command= | grep -Eq '(ANTHROPIC_API_KEY|OPENAI_API_KEY)=must-not-reach-child'; then fail 'provider key reached managed proxy'; fi
   fi
-  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start warpd --quiet
+  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start warpd --quiet || { dump_runtime_logs; fail 'managed warpd did not start'; }
   warpd_pid="$(node "$process_helper" verify-meta --home "$managed_home" --role warpd --field childPid)"
   wait_warp_health "$managed_warp" "$proxy_nonce" up divert || fail 'warpd did not verify the managed proxy listener identity'
   assert_diverted_request "$managed_warp" || fail 'a live /v1/messages request did not reach the verified proxy'
@@ -374,7 +382,7 @@ if [ "$native_os" = Linux ] || [ "$native_os" = Darwin ]; then
   grep -Fq "PXPIPE_EXPECTED_START_ID=$child_start" <<<"$warpd_env" || fail 'warpd did not receive the verified proxy start token'
   grep -Fq "CTS_INSTANCE_NONCE=$proxy_nonce" <<<"$warpd_env" || fail 'warpd did not receive the verified launch nonce'
   grep -Eq '(ANTHROPIC_API_KEY|OPENAI_API_KEY)=must-not-reach-child' <<<"$warpd_env" && fail 'provider key reached managed warpd'
-  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start monitor --quiet
+  ANTHROPIC_API_KEY='must-not-reach-child' OPENAI_API_KEY='must-not-reach-child' PATH="$managed_fake:$PATH" CTS_TARGET_HOME="$managed_home" CTS_MANAGED_BIN="$managed_home/.local/bin" "$managed_ctl" start monitor --quiet || { dump_runtime_logs; fail 'managed monitor did not start'; }
   monitor_pid="$(node "$process_helper" verify-meta --home "$managed_home" --role monitor --field childPid)"
   assert_monitor_sees_warp "$managed_monitor" || fail 'monitor could not authenticate and report the verified warpd route'
   if [ "$native_os" = Linux ]; then
