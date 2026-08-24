@@ -10,12 +10,52 @@ project.
 
 ## Claude path
 
-Claude keeps its established three-part stack:
+Claude keeps its established three-part stack. The layers are complementary,
+not three competing ways to measure the same tokens:
 
-1. `CLAUDE.md` guidance reduces unnecessary narration.
-2. RTK rewrites supported shell commands so repetitive CLI and MCP-adjacent
-   output is smaller.
-3. pxpipe/warpd compresses supported image traffic on Claude's configured path.
+1. `CLAUDE.md` guidance reduces Claude's avoidable output: preambles,
+   play-by-play narration, repeated summaries, speculative extras, and closing
+   fluff. It also asks Claude to inspect the relevant files, make focused
+   changes, and validate before declaring completion. User requests for depth
+   override the concise default.
+2. RTK reduces supported shell and MCP-adjacent output before Claude reads it.
+   Search results are grouped, diffs and logs are condensed, and test runners
+   keep failures while collapsing repetitive passing output. Unsupported
+   commands pass through normally.
+3. pxpipe/warpd reduces eligible dense request context before it reaches the
+   provider. pxpipe selects a model-specific render profile, wraps dense bulk
+   context into PNG pages plus a bounded factsheet, and forwards the native
+   request. A profitability gate leaves sparse prose as text. Unsupported
+   models and ineligible content pass through unchanged.
+
+The rules target output tokens, RTK targets tool-result input, and pxpipe
+targets resent request context. Their individual percentages cannot be added.
+The useful combined result depends on the task's mix of conversation, tools,
+and generated prose.
+
+### Claude evidence and trade-offs
+
+- The pinned pxpipe documentation shows a real render of about 48,000 dense
+  characters at roughly 2,700 image tokens versus 25,000 text tokens. Its
+  Claude Code measurements commonly reduce eligible resent request context by
+  about 60-70%, but cache behavior and workload density change the result.
+- pxpipe's quality probes cover arithmetic, gist, state tracking, false recall,
+  dense identifiers, and real software tasks. Image rendering is still lossy:
+  exact hashes, IDs, secrets, and other byte-critical values must stay text or
+  use a pass-through model.
+- RTK reports up to 90% reduction in supported command output. Its absolute
+  token estimate is bytes divided by four, so the percentage is useful while
+  the displayed token count is approximate. Command-output reduction is not a
+  claim about an entire bill or subscription limit.
+- The pinned `claude-token-efficient` N=5 benchmark found modest output-token
+  changes for its minimal rules and larger changes for its aggressive profile.
+  Rules also add input on every turn, so concise guidance pays off most on
+  output-heavy work. The stack's default file extends the upstream minimal
+  rules and is not identical to either tested profile.
+
+The exact upstream sources and receipts are vendored under `upstream/`. Pinned
+revisions and integration changes are listed in `VENDORED_SOURCES.json`; the
+original project links and licenses are retained in `NOTICE.md`.
 
 ## ChatGPT Work/Codex path
 

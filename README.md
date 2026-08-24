@@ -1,20 +1,24 @@
 # Claude-ChatGPT Token Stack
 
-Local tooling that makes Claude Code and ChatGPT Codex subscriptions go further by stripping input the models never needed to read. It is source-available and runs entirely on your machine.
+Use Claude Code and local ChatGPT Work/Codex as usual, while a local stack trims oversized context, noisy command output, and unnecessary narration before they consume more of your usage limit.
+
+Claude gets three complementary layers: concise project guidance, RTK command-output filtering, and pxpipe image-based context compression. ChatGPT Work/Codex gets four native hooks for the same general goal without proxying its subscription traffic.
+
+> **License:** source is provided for individual personal use. Read [LICENSE](LICENSE) before installing, redistributing, or adapting it.
 
 The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.2.
 
 **Current release: 0.6.2** - see [CHANGELOG.md](CHANGELOG.md).
 
-## The problem
+## Why this exists
 
-Coding agents spend most of your usage cap on *input* tokens, and a lot of that input is junk:
+Coding agents repeatedly send and read far more than the useful part of a task:
 
 - hundreds of lines of build noise from one shell command
 - a 2,000-line tool result the model quotes three lines from
-- narration nobody asked for
+- play-by-play narration, repeated explanations, and closing filler nobody asked for
 
-You pay for all of it.
+Those costs compound through a long work session. This project reduces them at the source while keeping the normal apps and subscription sign-in.
 
 ## What this stack does
 
@@ -25,15 +29,44 @@ It sits locally between the apps and the models and removes that waste before it
 - **Fails open.** If any component cannot process a call, the model receives the original command or result unchanged.
 - **Nothing is lost.** Replaced outputs are stored locally and recoverable on demand.
 
-## Measured savings
+## The Claude stack
+
+Claude keeps the original three-part design, with each layer handling a different kind of waste:
+
+1. **Token-efficient `CLAUDE.md` guidance** keeps Claude focused: read the relevant files, make the smallest complete change, verify it, and report the result without a flattering preamble, constant narration, repeated summary, or speculative extras. Explicit requests for a deep explanation still win.
+2. **RTK** intercepts supported shell commands and gives Claude a compact, useful view: grouped search hits, reduced diffs, failures instead of thousands of passing-test lines, and concise Git output. Unsupported commands pass through normally.
+3. **pxpipe + warpd** convert eligible dense context - such as system instructions, tool documentation, old history, code, and JSON - into compact PNG pages that Claude reads through its vision channel. A profitability gate leaves sparse prose as text, recent content stays readable in its safer native form, and unsupported models pass through unchanged.
+
+Together, the layers reduce Claude's own output, the command output fed back into it, and the bulky request context sent on later turns. Their percentages must not be added together; the combined result depends on the workload and how much traffic reaches each layer.
+
+### What the original projects measured
+
+| What | Result |
+|---|---|
+| pxpipe dense-context example | about 48,000 characters rendered as roughly **2,700 image tokens instead of 25,000 text tokens** |
+| pxpipe real-client request reduction | commonly **about 60-70%** on Claude Code's eligible resent context; workload and cache behavior matter |
+| RTK supported shell output | up to **90% less command output** read by the agent; estimated token counts, not total subscription usage |
+| `claude-token-efficient` minimal rules, length-focused prompts | directional N=5 means of **2%, 11%, and 7% fewer output tokens** on Haiku, Sonnet, and Opus |
+| `claude-token-efficient` aggressive profile, all five prompts | directional N=5 means of **22%, 32%, and 62% fewer output tokens** on Haiku, Sonnet, and Opus |
+
+These are upstream component measurements, not a promise that every session will match them. This stack's default `CLAUDE.md` extends the upstream minimal rules, so its behavior is not identical to either benchmark profile. pxpipe is intentionally lossy for dense image-rendered text: exact IDs, hashes, secrets, or other byte-critical values should remain text or use a pass-through model. The upstream evaluation and receipts are included under [`upstream/`](upstream/) so the claims can be inspected and reproduced.
+
+## The ChatGPT Work/Codex stack
+
+ChatGPT subscription traffic cannot be safely redirected through the Claude proxy path without changing the app's authentication boundary. The OpenAI side therefore stays native and uses four Codex hooks:
+
+1. `PreToolUse` routes supported shell commands through RTK.
+2. `PostToolUse` replaces oversized results with a compact receipt while retaining exact local evidence.
+3. `UserPromptSubmit` asks for lean routine responses while preserving explicit requests for depth.
+4. `SessionStart` restores the short operating policy after context compaction.
+
+### What this repository measured
 
 | What | Result |
 |---|---|
 | Oversized Codex tool result replaced by a receipt (native Codex 0.149.0 A/B, same model, same task) | **11,136 input tokens saved (26.56%)** - 41,925 vs 30,789 |
-| Shell output rewritten by RTK | up to 90% of the command output the agent reads |
 
 - The receipt A/B proves the *model* received the smaller input; the client can still display the raw output, and the exact original is retained locally.
-- RTK's figure is per-command output, not your total bill.
 - A retired whole-turn experiment measured 62.50-85.35% savings but added unacceptable latency; it ships as research data only and is never installed or enabled. Full data: [openai/native-context-compiler/docs/OFFLINE-RESULTS.md](openai/native-context-compiler/docs/OFFLINE-RESULTS.md).
 
 ## Quick start
@@ -47,20 +80,11 @@ Then restart ChatGPT/Codex, open `/hooks`, review the four Native Context Compil
 
 This one-time review is deliberate: the installer never silently approves executable hooks, and Codex invalidates trust if a hook definition changes. It preserves unrelated hooks, model settings, plugins, and user-authored AGENTS.md content, and backs up files before changing project-owned sections.
 
-## How it works
+## Local, reversible, and inspectable
 
-**Claude side**
+The stack has no remote account of its own, no API key, and no usage-billed model loop. It uses the subscription sessions already owned by Claude Code and ChatGPT Work/Codex. Components fail open: if a supported rewrite cannot run, the original command or result continues unchanged.
 
-- **RTK** (Rust CLI proxy) rewrites supported shell commands so the agent reads a filtered result instead of raw output.
-- **pxpipe** (local proxy, with its `warpd` helper) re-renders bulky conversation context into compact images on the way to the API; the model still reads everything.
-- A token-efficient `CLAUDE.md` rule set keeps responses short.
-
-**ChatGPT/Codex side** - four native Codex hooks, none of which starts another model turn:
-
-1. `PreToolUse` routes supported shell commands through RTK; unsupported commands pass through unchanged.
-2. `PostToolUse` replaces oversized model-visible results with a short deterministic receipt and stores the exact original locally. `ncc evidence-find` and `ncc evidence-slice` pull back only the lines the task needs; `ncc evidence-get` recovers everything.
-3. `UserPromptSubmit` adds a small per-turn budget for routine answers. Explicit requests for depth, tutorials, audits, or exhaustive detail are not capped.
-4. `SessionStart` (matching `compact`) restores the concise operating policy after Codex compacts a long task.
+On Codex, `ncc evidence-find` and `ncc evidence-slice` retrieve only the needed lines from a replaced result; `ncc evidence-get` recovers the full hook-visible value. On Claude, the pxpipe dashboard shows each eligible text-to-image transformation, estimated savings, model support, and the kill switch.
 
 A short managed block in `~/.codex/AGENTS.md` trims narration and preserves high-value state. EvidenceVault is exact from the `PostToolUse` boundary onward; bytes Codex truncated before that event cannot be recovered. Monitor telemetry is sanitized: it reports rewrites and reductions without exposing prompts, commands, answer bodies, session IDs, or evidence content.
 
@@ -108,6 +132,16 @@ ncc benchmark
 ```
 
 Restores the previous user-level `CODEX_CLI_PATH`, removes only project-owned hook groups and the managed AGENTS.md block, and preserves local sessions, evidence, settings, and sanitized metrics unless `-RemoveData` is used.
+
+## Original projects and credit
+
+This repository integrates and adapts three independent projects whose documentation and licenses remain included:
+
+- [pxpipe](https://github.com/teamchong/pxpipe) by teamchong - local image-based context compression
+- [RTK](https://github.com/rtk-ai/rtk) by rtk-ai - compact shell output for coding agents
+- [claude-token-efficient](https://github.com/drona23/claude-token-efficient) by drona23 - concise Claude behavior rules and reproducible benchmarks
+
+Exact pinned revisions, local adaptations, and licenses are recorded in [VENDORED_SOURCES.json](VENDORED_SOURCES.json) and [NOTICE.md](NOTICE.md). Upstream benchmark claims above remain theirs; the 26.56% Codex receipt A/B is this repository's measurement.
 
 ## License, docs, contact
 
