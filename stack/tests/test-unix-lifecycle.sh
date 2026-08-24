@@ -246,7 +246,7 @@ node "$full_home/.local/bin/lib/unix-lifecycle.js" service --home "$full_home" -
 grep -q 'claude-token-stack.service\|CTS_TARGET_HOME' "$full_home/.config/systemd/user/claude-token-stack.service" || fail 'safe systemd template is incomplete'
 node "$full_home/.local/bin/lib/unix-lifecycle.js" service --home "$full_home" --mode off --kind systemd >/dev/null
 node "$full_home/.local/bin/lib/unix-lifecycle.js" service --home "$full_home" --mode on --kind launchd >/dev/null
-grep -q 'com.alexxmdsxcarter.claude-token-stack\|CTS_TARGET_HOME' "$full_home/Library/LaunchAgents/com.alexxmdsxcarter.claude-token-stack.plist" || fail 'safe launchd template is incomplete'
+grep -q 'com.alehcksgit.claude-token-stack\|CTS_TARGET_HOME' "$full_home/Library/LaunchAgents/com.alehcksgit.claude-token-stack.plist" || fail 'safe launchd template is incomplete'
 node "$full_home/.local/bin/lib/unix-lifecycle.js" service --home "$full_home" --mode off --kind launchd >/dev/null
 node "$full_home/.local/bin/lib/unix-lifecycle.js" settings --home "$full_home" --mode on --warp-url 'http://127.0.0.1:47822' --ca-path "$full_home/.pxpipe/warp-ca.pem"
 node - "$full_home/.claude/settings.json" <<'JS'

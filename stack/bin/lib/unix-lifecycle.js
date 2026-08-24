@@ -114,7 +114,7 @@ function layout(targetHome) {
       'warpd-route': path.join(bin, 'lib', 'warpd', 'route.ts'),
       'warpd-main': path.join(bin, 'lib', 'warpd', 'warpd.ts'),
       'warpd-license': path.join(bin, 'lib', 'warpd', 'LICENSE.pxpipe'),
-      'launchd-service': path.join(home, 'Library', 'LaunchAgents', 'com.alexxmdsxcarter.claude-token-stack.plist'),
+      'launchd-service': path.join(home, 'Library', 'LaunchAgents', 'com.alehcksgit.claude-token-stack.plist'),
       'systemd-service': path.join(home, '.config', 'systemd', 'user', 'claude-token-stack.service'),
     },
   };
@@ -944,7 +944,7 @@ function serviceContent(paths, kind) {
   const safePath = [...new Set([path.dirname(process.execPath), '/usr/local/bin', '/usr/bin', '/bin'])].join(':');
   if (kind === 'launchd') {
     const xml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>com.alexxmdsxcarter.claude-token-stack</string>\n<key>ProgramArguments</key><array><string>/bin/bash</string><string>${xml(ctl)}</string><string>start</string><string>--quiet</string></array>\n<key>EnvironmentVariables</key><dict><key>CTS_TARGET_HOME</key><string>${xml(paths.home)}</string><key>CTS_MANAGED_BIN</key><string>${xml(paths.bin)}</string><key>PATH</key><string>${xml(safePath)}</string></dict>\n<key>RunAtLoad</key><true/>\n</dict></plist>\n`, 'utf8');
+    return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>com.alehcksgit.claude-token-stack</string>\n<key>ProgramArguments</key><array><string>/bin/bash</string><string>${xml(ctl)}</string><string>start</string><string>--quiet</string></array>\n<key>EnvironmentVariables</key><dict><key>CTS_TARGET_HOME</key><string>${xml(paths.home)}</string><key>CTS_MANAGED_BIN</key><string>${xml(paths.bin)}</string><key>PATH</key><string>${xml(safePath)}</string></dict>\n<key>RunAtLoad</key><true/>\n</dict></plist>\n`, 'utf8');
   }
   const systemdQuote = (value) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%')}"`;
   return Buffer.from(`[Unit]\nDescription=Claude Token Stack local proxy\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nEnvironment=${systemdQuote(`CTS_TARGET_HOME=${paths.home}`)}\nEnvironment=${systemdQuote(`CTS_MANAGED_BIN=${paths.bin}`)}\nEnvironment=${systemdQuote(`PATH=${safePath}`)}\nExecStart=/bin/bash ${systemdQuote(ctl)} start --quiet\nExecStop=/bin/bash ${systemdQuote(ctl)} stop --quiet\n\n[Install]\nWantedBy=default.target\n`, 'utf8');

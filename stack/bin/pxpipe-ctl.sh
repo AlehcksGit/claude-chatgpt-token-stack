@@ -419,7 +419,7 @@ config_command() {
 }
 
 autostart() {
-  local operation="${1:-status}" system label='com.alexxmdsxcarter.claude-token-stack' unit='claude-token-stack.service' service_id service_file match_rc uid domain
+  local operation="${1:-status}" system label='com.alehcksgit.claude-token-stack' unit='claude-token-stack.service' service_id service_file match_rc uid domain
   case "$(uname -s)" in Darwin) system=launchd; service_id=launchd-service; service_file="$TARGET_HOME/Library/LaunchAgents/$label.plist" ;; *) system=systemd; service_id=systemd-service; service_file="$TARGET_HOME/.config/systemd/user/$unit" ;; esac
   case "$operation" in
     on)

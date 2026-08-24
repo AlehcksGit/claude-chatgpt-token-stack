@@ -94,7 +94,7 @@ stop_recorded_role warpd
 stop_recorded_role proxy
 
 disable_owned_service() {
-  local kind id rc label='com.alexxmdsxcarter.claude-token-stack' unit='claude-token-stack.service'
+  local kind id rc label='com.alehcksgit.claude-token-stack' unit='claude-token-stack.service'
   case "$(uname -s)" in Darwin) kind=launchd; id=launchd-service ;; *) kind=systemd; id=systemd-service ;; esac
   set +e
   "$NODE_BIN" "$LIFECYCLE" matches --home "$TARGET_HOME" --id "$id" >/dev/null 2>&1
