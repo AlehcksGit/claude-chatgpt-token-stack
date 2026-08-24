@@ -22,12 +22,12 @@ Those costs compound through a long work session. This project reduces them at t
 
 ## What this stack does
 
-It sits locally between the apps and the models and removes that waste before it is sent.
+It adds local reduction at the points each app safely exposes.
 
-- **Same workflow.** You keep typing in Claude Code and the normal local Codex Work composer. No new UI, no new service.
-- **Nothing leaves your machine differently.** It uses your existing subscription session. No API key, no usage-billed API requests, no third-party endpoints.
-- **Fails open.** If any component cannot process a call, the model receives the original command or result unchanged.
-- **Nothing is lost.** Replaced outputs are stored locally and recoverable on demand.
+- **Same workflow.** You keep typing in Claude Code and the normal local Codex Work composer. Local dashboards and background helpers do not replace either app.
+- **Same subscriptions.** No API key, separately billed model request, project account, or project telemetry is added.
+- **Provider-specific paths.** Claude traffic passes through local pxpipe/warpd before reaching its configured provider. Codex traffic stays native and is reduced through hooks.
+- **Fails open.** Unsupported or failed rewrites pass through unchanged. Codex receipts retain exact hook-visible evidence; pxpipe's dense image rendering is lossy and has separate precision safeguards and pass-through controls.
 
 ## The Claude stack
 
@@ -72,13 +72,21 @@ ChatGPT subscription traffic cannot be safely redirected through the Claude prox
 ## Quick start
 
 ```powershell
-.\setup.cmd install-all      # both sides
-.\setup.cmd install-openai   # OpenAI side only
+.\setup.cmd                  # guided menu
+.\setup.cmd install-all      # Claude + ChatGPT Work/Codex
+.\setup.cmd install-claude   # Claude only
+.\setup.cmd install-openai   # ChatGPT Work/Codex only
+.\setup.cmd status           # status for both sides
 ```
 
-Then restart ChatGPT/Codex, open `/hooks`, review the four Native Context Compiler hooks, and trust them once. For fresh normal tasks `/hooks` must show **Active 4, Review 0**.
+After installation:
 
-This one-time review is deliberate: the installer never silently approves executable hooks, and Codex invalidates trust if a hook definition changes. It preserves unrelated hooks, model settings, plugins, and user-authored AGENTS.md content, and backs up files before changing project-owned sections.
+- **Claude:** run `pxpipe-ctl doctor`, then open `http://127.0.0.1:47821/`. The doctor checks the rules, RTK, pxpipe, warpd, settings, and managed startup. Restart Claude if it was already open.
+- **ChatGPT Work/Codex:** restart the app, open `/hooks`, review the four Native Context Compiler hooks, and trust them once. In a fresh task `/hooks` must show **Active 4, Review 0**.
+
+The installers preserve unrelated Claude settings, Codex hooks, model choices, plugins, and user-authored rule content. Every managed change has an ownership receipt and baseline backup so each side can be removed independently.
+
+On Linux or macOS, `./install.sh` and `./uninstall.sh` provide the tested Claude-only lifecycle. The OpenAI side remains Windows-only in 0.6.2.
 
 ## Local, reversible, and inspectable
 
@@ -88,7 +96,31 @@ On Codex, `ncc evidence-find` and `ncc evidence-slice` retrieve only the needed 
 
 A short managed block in `~/.codex/AGENTS.md` trims narration and preserves high-value state. EvidenceVault is exact from the `PostToolUse` boundary onward; bytes Codex truncated before that event cannot be recovered. Monitor telemetry is sanitized: it reports rewrites and reductions without exposing prompts, commands, answer bodies, session IDs, or evidence content.
 
-## Commands
+## Everyday controls
+
+**Whole stack**
+
+```powershell
+.\setup.cmd status
+.\setup.cmd install-claude|install-openai|install-all
+.\setup.cmd uninstall-claude|uninstall-openai|uninstall-all
+```
+
+**Claude**
+
+```powershell
+pxpipe-ctl status
+pxpipe-ctl doctor
+pxpipe-ctl start|stop|restart
+pxpipe-ctl dashboard
+pxpipe-ctl models show|add|remove|all|off|reset
+pxpipe-ctl config list|get|set|unset
+pxpipe-ctl autostart on|off|status
+```
+
+The default Claude rules are balanced for coding work. Advanced users can run `powershell -File .\install.ps1 -Profile <default|compressed|coding|analysis|agents>` to select an upstream rules profile during Claude installation. The more aggressive profiles trade explanation and safeguards for shorter output.
+
+**ChatGPT Work/Codex**
 
 ```powershell
 ncc status
@@ -99,7 +131,7 @@ ncc evidence-slice <handle> --start-line 120 --lines 60
 ncc benchmark
 ```
 
-`ncc settings` prints the editable local settings path (RTK, receipt compaction, and the turn budget can be controlled independently). An opt-in guarded hook A/B is available from the compiler source directory when other subscription clients are idle: `npm run hook-eval -- --model <your-codex-model> --effort low --claude-idle`.
+`ncc settings` prints the editable OpenAI-side settings path. RTK routing, receipt compaction, and the turn budget can be controlled independently. An opt-in guarded hook A/B is available from the compiler source directory when other subscription clients are idle: `npm run hook-eval -- --model <your-codex-model> --effort low --claude-idle`.
 
 ## Requirements and scope
 
@@ -107,6 +139,7 @@ ncc benchmark
 - Claude-only Unix path: Linux or macOS with Bash, Node.js, and the normal Claude prerequisites, using `install.sh` and `uninstall.sh`.
 - The OpenAI side covers local **Work** tasks on ChatGPT Pro or an eligible higher-tier workspace subscription. Ordinary Chat conversations, remote/cloud tasks, and API-key usage are not covered. The model and reasoning effort you pick in the app are preserved.
 - Running only the OpenAI installer does not modify or restart Claude, pxpipe, warpd, or the shared monitor.
+- Running only the Claude installer does not add Codex hooks, change `AGENTS.md`, or alter OpenAI-local settings.
 
 ## Local monitors (loopback only)
 
@@ -117,7 +150,9 @@ ncc benchmark
 | `http://127.0.0.1:47823/` | Combined Claude + Codex monitor |
 | `http://127.0.0.1:47831/` | Codex Work dashboard |
 
-47831 is never a model proxy. On the Codex cards, **installed** means the hook definitions exist, **live** means a real non-probe hook fired in the last 15 minutes, and **verified - idle** means past measurements prove it worked but not that it is firing now. Seeing three of four events is normal; `SessionStart` only fires after a compact. `/hooks` remains the authoritative trust view.
+The Claude dashboard at 47821 shows model scope, transformations, token estimates, and its kill switch. The combined monitor at 47823 reports both independently so one side being offline does not imply the other is broken.
+
+Port 47831 is never a model proxy. On the Codex cards, **installed** means the hook definitions exist, **live** means a real non-probe hook fired in the last 15 minutes, and **verified - idle** means past measurements prove it worked but not that it is firing now. Seeing three of four events is normal; `SessionStart` only fires after a compact. `/hooks` remains the authoritative Codex trust view.
 
 ## Limitations
 
@@ -125,13 +160,19 @@ ncc benchmark
 - Codex 0.149 may show a blocked/failed wrapper when `PostToolUse` replaces a result. The command already ran; only the oversized output was replaced, and the receipt states the real exit status.
 - This release is **source-only**: no compiled executables, DLLs, native modules, fonts, images, or prebuilt runtime bundles. Review the source, hooks, and settings before trusting executable hooks.
 
-## Uninstall
+## Uninstall or remove one side
 
 ```powershell
-.\setup.cmd uninstall-openai
+.\setup.cmd uninstall-all       # remove both integrations
+.\setup.cmd uninstall-claude    # leave ChatGPT Work/Codex installed
+.\setup.cmd uninstall-openai    # leave Claude installed
 ```
 
-Restores the previous user-level `CODEX_CLI_PATH`, removes only project-owned hook groups and the managed AGENTS.md block, and preserves local sessions, evidence, settings, and sanitized metrics unless `-RemoveData` is used.
+All three are receipt-driven and preserve later user edits.
+
+- **Claude uninstall** stops project-owned pxpipe/warpd processes and startup tasks, restores the previous Claude rules and settings, and removes only files owned by this installer. RTK, pxpipe, and `~/.pxpipe` data are preserved by default.
+- **OpenAI uninstall** restores the previous user-level `CODEX_CLI_PATH`, removes only project-owned hook groups and the managed `AGENTS.md` block, and preserves local sessions, evidence, settings, and sanitized metrics by default.
+- Add `-RemoveTools` to a setup uninstall command to remove shared dependencies only when their receipts prove this stack installed them and the other side no longer needs them. Use `.\uninstall-openai.ps1 -RemoveData` only when you also want the retained Codex evidence and metrics deleted.
 
 ## Original projects and credit
 

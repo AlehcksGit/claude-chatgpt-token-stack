@@ -18,6 +18,11 @@ changes only the OpenAI package, project-owned Codex hooks, managed AGENTS.md
 block, and OpenAI-local settings. It does not restart or reconfigure Claude,
 pxpipe, warpd, or the shared monitor.
 
+Conversely, `setup.cmd install-claude` changes only the receipt-owned Claude
+rules, RTK integration, pxpipe/warpd launchers, Claude-local settings, and
+Claude monitor path. It does not add Codex hooks, change AGENTS.md, or alter
+OpenAI-local settings.
+
 Model selection remains provider-owned. Claude uses its existing model
 configuration. ChatGPT Work/Codex keeps the model and reasoning effort selected
 in the app; the compiler does not choose a replacement model.
@@ -25,3 +30,9 @@ in the app; the compiler does not choose a replacement model.
 The local state roots, hook definitions, evidence, receipts, and rollback
 ownership are separate. Uninstallers remove only exact project-owned entries
 and preserve later user edits and unrelated hooks.
+
+`setup.cmd uninstall-claude` and `setup.cmd uninstall-openai` remove either
+side independently; `setup.cmd uninstall-all` removes both. Shared RTK/pxpipe
+tools and local measurements are preserved by default. `-RemoveTools` removes
+only dependencies proven to be installer-owned and no longer required by the
+other side.

@@ -1,10 +1,25 @@
 # Security model
 
-> **0.6.2 supported mode:** the desktop Lean bridge is not installed and normal
-> Work traffic is not proxied. UserPromptSubmit, PreToolUse, PostToolUse, and
-> SessionStart are enabled as lightweight local hooks.
+Version 0.6.2 has two independent local trust boundaries. Claude uses its
+established pxpipe/warpd proxy path. ChatGPT Work/Codex stays on native app
+traffic and uses four lightweight local hooks; its retired Lean bridge is not
+installed.
 
-## Trust boundary
+## Claude trust boundary
+
+The Claude path runs under the current user. RTK filters supported command
+output. pxpipe rewrites eligible provider requests on loopback, and warpd
+re-terminates only the configured Anthropic API route with a locally generated
+CA before forwarding it to pxpipe. The CA is scoped to the launched process;
+the installer does not add it to the Windows system trust store.
+
+Claude requests still go to the configured provider through the user's normal
+Claude authentication. This project requests no API key and sends no project
+telemetry. Protect `~/.pxpipe`, which contains local CA material, receipts,
+logs, measurements, and any optional diagnostic samples. Image-rendered context
+is intentionally lossy; keep byte-critical values on a pass-through text path.
+
+## ChatGPT Work/Codex trust boundary
 
 The OpenAI stack runs locally under the current user. It does not request an
 API key, proxy the provider connection, make a usage-billed API request, or
@@ -23,6 +38,11 @@ compile or register the historical launcher. Installers may obtain declared depe
 users should inspect the source and warnings before running them.
 
 ## Sensitive data
+
+The two data roots are independent. Claude-side state lives primarily under
+`~/.pxpipe` and `~/.claude-token-stack`; Codex-side state lives under
+`%LOCALAPPDATA%\NativeContextCompiler` and `~/.openai-token-stack`. Do not
+publish any of these directories.
 
 The EvidenceVault stores exact replaced tool output locally so a receipt is
 reversible. Tool output can contain secrets, source code, paths, or personal
@@ -62,7 +82,10 @@ Claude pxpipe remains isolated on the Claude path.
 
 ## Rollback
 
-Installers back up changed hook and guidance files and record the previous
-user-level `CODEX_CLI_PATH`. Uninstall restores that value and removes exact
-project-owned hook groups and the managed AGENTS.md block. Bridge replies,
-evidence, settings, and metrics remain unless the user requests data removal.
+Both installers record immutable baselines and project ownership. Claude
+uninstall stops owned services/tasks, restores prior Claude rules and settings,
+and preserves later edits. OpenAI uninstall restores the previous user-level
+`CODEX_CLI_PATH` and removes exact project-owned hook groups and the managed
+AGENTS.md block. Shared tools and local measurements remain by default;
+explicit removal is separate so uninstalling one side cannot silently break
+the other.
