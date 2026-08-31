@@ -9,7 +9,7 @@ import { installCodexStack } from './install-codex-stack.mjs';
 import { uninstallDesktopBridge } from './install-desktop-bridge.mjs';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '0.6.3';
+const VERSION = '0.6.4';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function findNpmCli() {
@@ -47,7 +47,7 @@ export async function installAll({
   installStack = installCodexStack,
   restoreBridge = uninstallDesktopBridge,
 } = {}) {
-  if (process.platform !== 'win32') throw new Error('The all-in-one 0.6.3 installer currently supports Windows only');
+  if (process.platform !== 'win32') throw new Error('The all-in-one 0.6.4 installer currently supports Windows only');
   const npmCli = await findNpmCli();
   await execFileAsync(process.execPath, [npmCli, 'install', '--global', projectRoot, '--ignore-scripts', '--install-links'], {
     cwd: projectRoot,

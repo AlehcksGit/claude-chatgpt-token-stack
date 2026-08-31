@@ -138,9 +138,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
       - name: Compare unpatched files with immutable upstream commits
         shell: pwsh
         run: ./tools/verify-vendored-sources.ps1
+      - name: Verify pinned pxpipe archive and hardened runtime
+        run: node tools/test-pxpipe-runtime-patch.mjs
 
   pxpipe:
     name: pxpipe (${{ matrix.os }}, Node ${{ matrix.node }})

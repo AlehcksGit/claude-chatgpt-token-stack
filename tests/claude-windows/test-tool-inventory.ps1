@@ -6,6 +6,12 @@ $suiteRoot = New-TestSuiteRoot 'tool-inventory'
 $install = Join-Path $script:RepoRoot 'install.ps1'
 $uninstall = Join-Path $script:RepoRoot 'uninstall.ps1'
 $utf8 = New-Object Text.UTF8Encoding($false)
+$reviewedDownload=Join-Path $suiteRoot 'reviewed-download';$reviewedTemplatePrefix=Join-Path $suiteRoot 'reviewed-template-prefix';New-Item -ItemType Directory -Path $reviewedDownload,$reviewedTemplatePrefix -Force|Out-Null
+$realNpm=(Get-Command npm.cmd -ErrorAction Stop).Source
+$packRaw=(& $realNpm pack 'pxpipe-proxy@0.13.2' --ignore-scripts --json --pack-destination $reviewedDownload --registry=https://registry.npmjs.org/ 2>$null|Out-String);if($LASTEXITCODE-ne0){throw 'Could not prepare reviewed pxpipe archive fixture.'};$pack=@($packRaw|ConvertFrom-Json);if($pack.Count-ne1-or[string]$pack[0].integrity-cne'sha512-utMkpkWAjgQyldB62ebWrTFKhTmMKTiwXIktqbHxLixrtgw/g+r9/0nzG2Vz1prKSvH2Q7x9JNrG4LwEmlHQ+g=='){throw 'Reviewed pxpipe fixture integrity mismatch.'}
+$reviewedArchive=Join-Path $reviewedDownload ([string]$pack[0].filename)
+& $realNpm install --global --prefix $reviewedTemplatePrefix $reviewedArchive --ignore-scripts --no-audit --no-fund --install-strategy=nested 1>$null;if($LASTEXITCODE-ne0){throw 'Could not prepare reviewed pxpipe package fixture.'}
+$reviewedTemplate=Join-Path $reviewedTemplatePrefix 'node_modules\pxpipe-proxy';if(-not(Test-Path -LiteralPath $reviewedTemplate -PathType Container)){throw 'Reviewed pxpipe package fixture is missing.'}
 
 $fakeWinget = @'
 $Remaining = @($args)
@@ -64,13 +70,17 @@ $packageRoot = Join-Path $root 'pxpipe-proxy'
 switch ($command) {
   'root' { Write-Output $root; exit 0 }
   'prefix' { Write-Output $prefix; exit 0 }
+  'pack' {
+    if (@($args) -notcontains 'pxpipe-proxy@0.13.2' -or @($args) -notcontains '--ignore-scripts' -or @($args) -notcontains '--registry=https://registry.npmjs.org/') { Write-Error 'unreviewed pxpipe pack'; exit 9 }
+    $index=[Array]::IndexOf([object[]]$args,'--pack-destination');if($index-lt0-or$index+1-ge$args.Count){Write-Error 'missing pack destination';exit 9};$destination=[IO.Path]::GetFullPath([string]$args[$index+1]);$filename=[IO.Path]::GetFileName($env:CTS_TEST_PX_ARCHIVE);Copy-Item -LiteralPath $env:CTS_TEST_PX_ARCHIVE -Destination (Join-Path $destination $filename) -Force
+    [pscustomobject]@{name='pxpipe-proxy';version='0.13.2';filename=$filename;integrity='sha512-utMkpkWAjgQyldB62ebWrTFKhTmMKTiwXIktqbHxLixrtgw/g+r9/0nzG2Vz1prKSvH2Q7x9JNrG4LwEmlHQ+g=='}|ConvertTo-Json -Compress|Write-Output;exit 0
+  }
   'install' {
-    if (@($args) -notcontains 'pxpipe-proxy@0.13.2') { Write-Error 'unpinned pxpipe install'; exit 9 }
-    New-Item -ItemType Directory -Path (Join-Path $packageRoot 'bin') -Force | Out-Null
-    [IO.File]::WriteAllText((Join-Path $packageRoot 'package.json'),'{"name":"pxpipe-proxy","version":"0.13.2"}',$utf8)
-    [IO.File]::WriteAllText((Join-Path $packageRoot 'bin\cli.js'),'const http=require("http");const p=Number(process.env.PORT||process.env.PXPIPE_PORT);http.createServer((q,s)=>{s.setHeader("content-type","application/json");if(q.url==="/proxy-stats"||q.url==="/api/stats.json")s.end("{}");else s.end(JSON.stringify({service:"pxpipe"}))}).listen(p,"127.0.0.1");',$utf8)
+    $archives=@($args|Where-Object{[IO.Path]::GetFileName([string]$_)-ceq[IO.Path]::GetFileName($env:CTS_TEST_PX_ARCHIVE)-and(Test-Path -LiteralPath ([string]$_) -PathType Leaf)})
+    if (@($args) -notcontains '--ignore-scripts' -or @($args) -notcontains '--install-strategy=nested' -or$archives.Count-ne1-or(Get-FileHash -LiteralPath ([string]$archives[0]) -Algorithm SHA512).Hash-cne(Get-FileHash -LiteralPath $env:CTS_TEST_PX_ARCHIVE -Algorithm SHA512).Hash) { Write-Error 'unreviewed pxpipe install'; exit 9 }
+    if(Test-Path -LiteralPath $packageRoot){Remove-Item -LiteralPath $packageRoot -Recurse -Force};Copy-Item -LiteralPath $env:CTS_TEST_PX_TEMPLATE -Destination $packageRoot -Recurse
     foreach($name in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){[IO.File]::WriteAllText((Join-Path $prefix $name),("owned "+$name),$utf8)}
-    if($env:CTS_TEST_FAIL_AFTER_INSTALL-eq'1'){exit 37}
+    if($env:CTS_TEST_FAIL_AFTER_INSTALL-eq'1'){$dependency=Join-Path $packageRoot 'node_modules\gpt-tokenizer';if(Test-Path -LiteralPath $dependency){Remove-Item -LiteralPath $dependency -Recurse -Force}}
     exit 0
   }
   'uninstall' {
@@ -88,7 +98,7 @@ function New-PxpipeFixture([string]$Name) {
   [IO.File]::WriteAllText((Join-Path $managerBin 'npm.cmd'),"@echo off`r`nif /i `"%~1`"==`"root`" (echo %CTS_TEST_NPM_ROOT%&exit /b 0)`r`nif /i `"%~1`"==`"prefix`" (echo %CTS_TEST_NPM_PREFIX%&exit /b 0)`r`npowershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"%~dp0fake-npm.ps1`" %*`r`nexit /b %errorlevel%`r`n",$utf8)
   $nodeDir=Split-Path -Parent (Get-Command node.exe).Source;$psDir=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0'
   $envMap=Get-TestEnvironment $profile '';$envMap.Path=$managerBin+';'+$nodeDir+';'+$psDir+';'+(Join-Path $env:SystemRoot 'System32')+';'+$env:SystemRoot
-  $envMap.CTS_TEST_NPM_PREFIX=$prefix;$envMap.CTS_TEST_NPM_ROOT=$root;$envMap.CTS_TEST_PX_STICKY='0';$envMap.CTS_TEST_FAIL_AFTER_INSTALL='0'
+  $envMap.CTS_TEST_NPM_PREFIX=$prefix;$envMap.CTS_TEST_NPM_ROOT=$root;$envMap.CTS_TEST_PX_STICKY='0';$envMap.CTS_TEST_FAIL_AFTER_INSTALL='0';$envMap.CTS_TEST_PX_ARCHIVE=$reviewedArchive;$envMap.CTS_TEST_PX_TEMPLATE=$reviewedTemplate
   $envMap.PXPIPE_PORT=[string](Get-FreeTcpPort);$envMap.PXPIPE_WARP_PORT=[string](Get-FreeTcpPort);$envMap.PXPIPE_MONITOR_PORT=[string](Get-FreeTcpPort)
   return [pscustomobject]@{Profile=$profile;Prefix=$prefix;Root=$root;Environment=$envMap}
 }
@@ -156,7 +166,7 @@ try {
 
   $px=New-PxpipeFixture 'pxpipe-interrupted-intent';$px.Environment.CTS_TEST_FAIL_AFTER_INSTALL='1'
   $result=Invoke-TestPowerShell $Engine $install @('-TargetHome',$px.Profile,'-SkipRtk','-SkipRules','-NoDesktop','-NoPath') $px.Environment
-  Assert-True($result.Code-ne0)'interrupted pxpipe fixture unexpectedly completed';Assert-True(Test-Path -LiteralPath(Join-Path $px.Root 'pxpipe-proxy\package.json'))'interrupted pxpipe post-state was not created';Assert-True(Test-Path -LiteralPath(Join-Path $px.Profile '.claude-token-stack\install-journal.json'))'interrupted pxpipe intent journal was lost'
+  Assert-True($result.Code-ne0)'interrupted pxpipe fixture unexpectedly completed';Assert-True(Test-Path -LiteralPath(Join-Path $px.Root 'pxpipe-proxy\package.json'))("interrupted pxpipe post-state was not created: "+$result.Output);Assert-True(Test-Path -LiteralPath(Join-Path $px.Profile '.claude-token-stack\install-journal.json'))'interrupted pxpipe intent journal was lost'
   $px.Environment.CTS_TEST_FAIL_AFTER_INSTALL='0';$result=Invoke-TestPowerShell $Engine $uninstall @('-TargetHome',$px.Profile,'-RemoveTools') $px.Environment
   Assert-Equal 0 $result.Code "interrupted pxpipe reconciliation/removal failed: $($result.Output)";foreach($name in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){Assert-True(-not(Test-Path -LiteralPath(Join-Path $px.Prefix $name)))"interrupted pxpipe shim $name became an orphan"};Assert-True(-not(Test-Path -LiteralPath(Join-Path $px.Profile '.claude-token-stack')))'interrupted pxpipe receipts were not retired'
 

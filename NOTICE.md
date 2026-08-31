@@ -6,7 +6,7 @@ projects. Their copyrights and licenses remain their own. Exact source commits
 and machine-readable patch notes are also recorded in
 `VENDORED_SOURCES.json`.
 
-The 0.6.3 Native Context Compiler uses the npm package `gpt-tokenizer` 3.4.0
+The 0.6.4 Native Context Compiler uses the npm package `gpt-tokenizer` 3.4.0
 (MIT) for local estimates. It makes no provider request and is included from the
 locked dependency declared under `openai/native-context-compiler`.
 
@@ -24,8 +24,8 @@ declared package during installation.
 - License: MIT (`upstream/pxpipe/LICENSE`)
 
 The snapshot's local changes are enumerated in `VENDORED_SOURCES.json`, including
-the Windows `fileURLToPath` build fix and the 0.6.3 security-source patches
-described in `docs/SECURITY-REVIEW-0.6.3.md`. The files
+the Windows `fileURLToPath` build fix and the 0.6.4 security-source patches
+described in `docs/SECURITY-REVIEW-0.6.4.md`. The files
 `stack/bin/lib/warpd/{ca,connect,route,der}.ts` are copied from pxpipe's
 `src/warp/` support files with local TypeScript import-suffix changes; `connect.ts`
 also uses a null-prototype header dictionary and fixed upstream-error text.

@@ -9,7 +9,7 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Native Context Compiler 0.6.3 low-latency mode installed successfully.
+echo Native Context Compiler 0.6.4 low-latency mode installed successfully.
 echo Restart ChatGPT/Codex, open /hooks, and trust the four reviewed Native Context Compiler hooks once.
 echo The whole-turn Lean bridge remains disabled.
 echo Then keep using local Work tasks normally.

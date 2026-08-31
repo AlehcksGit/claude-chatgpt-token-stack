@@ -13,6 +13,7 @@
 
 import * as fs from 'node:fs';
 import { shouldIncludeFile } from './core/export.js';
+import { readStableRegularFile } from './safe-fs.js';
 
 /** Files larger than this are skipped by export (1 MiB). A single export bundle
  *  is meant to be paste-sized; a multi-MB file is never intentional context and
@@ -49,19 +50,8 @@ export function readExportTextFile(
   exclude: string[],
 ): ExportReadResult {
   if (!shouldIncludeFile(relPath, include, exclude)) return { kind: 'excluded' };
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(fullPath);
-  } catch {
-    return { kind: 'inaccessible' };
-  }
-  if (stat.size > MAX_FILE_BYTES) return { kind: 'oversized' };
-  let buf: Buffer;
-  try {
-    buf = fs.readFileSync(fullPath);
-  } catch {
-    return { kind: 'inaccessible' };
-  }
-  if (looksLikeBinary(buf)) return { kind: 'binary' };
-  return { kind: 'ok', content: buf.toString('utf8') };
+  const result = readStableRegularFile(fullPath, MAX_FILE_BYTES);
+  if (result.kind !== 'ok') return result;
+  if (looksLikeBinary(result.data)) return { kind: 'binary' };
+  return { kind: 'ok', content: result.data.toString('utf8') };
 }

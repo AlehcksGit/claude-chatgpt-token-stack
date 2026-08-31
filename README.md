@@ -6,10 +6,10 @@ Claude gets three complementary layers: concise project guidance, RTK command-ou
 
 > **License:** source is provided for individual personal use. Read [LICENSE](LICENSE) before installing, redistributing, or adapting it.
 
-The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.3.
+The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.4.
 
-**Current release: 0.6.3** - see [CHANGELOG.md](CHANGELOG.md).
-Read the [security review and remaining risks](docs/SECURITY-REVIEW-0.6.3.md)
+**Current release: 0.6.4** - see [CHANGELOG.md](CHANGELOG.md).
+Read the [security review and remaining risks](docs/SECURITY-REVIEW-0.6.4.md)
 before installing. A successful security-scan run is not a zero-finding result;
 the pinned npm runtime does not inherit the vendored source-only fixes.
 
@@ -88,7 +88,7 @@ ask for administrator approval. Existing Node 22.7+ within 22.x or Node 24.x is
 kept; other versions are preserved and setup explains how to correct them.
 Node remains installed when this stack is removed because other apps may use it.
 RTK requires Microsoft's App Installer (`winget`); Codex-only setup installs RTK
-0.45.0 too. Downloads require internet access. See [the release audit](docs/RELEASE-AUDIT-0.6.3.md)
+0.45.0 too. Downloads require internet access. See [the release audit](docs/RELEASE-AUDIT-0.6.4.md)
 for verification scope and limitations.
 
 After installation:
@@ -98,7 +98,7 @@ After installation:
 
 The installers preserve unrelated Claude settings, Codex hooks, model choices, plugins, and user-authored rule content. Every managed change has an ownership receipt and baseline backup so each side can be removed independently.
 
-On Linux or macOS, `./install.sh` and `./uninstall.sh` provide the tested Claude-only lifecycle. The OpenAI side remains Windows-only in 0.6.3.
+On Linux or macOS, `./install.sh` and `./uninstall.sh` provide the tested Claude-only lifecycle. The OpenAI side remains Windows-only in 0.6.4.
 
 ## Local, reversible, and inspectable
 

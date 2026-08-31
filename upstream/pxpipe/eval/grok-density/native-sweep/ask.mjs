@@ -2,14 +2,15 @@
 // Writes answers-<label>.json with per-token answer + conf.
 // Run: OPENAI_BASE_URL=http://127.0.0.1:<GATEWAY_PORT>/v1 OPENAI_API_KEY=… \
 //      node eval/grok-density/native-sweep/ask.mjs jbmono14
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { atomicWritePrivate, safeChild } from '../../lib/io-safety.mjs';
 import { callResponses } from '../../sol-profile/responses-client.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const label = process.argv[2];
-if (!label) { console.error('usage: ask.mjs <label>'); process.exit(2); }
+if (!label || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(label)) { console.error('usage: ask.mjs <safe-label>'); process.exit(2); }
 
 const MODEL = process.env.GROK_DENSITY_MODEL || process.env.SOL_QUALITY_MODEL || 'grok-4.5';
 const TIMEOUT = Number(process.env.GROK_DENSITY_TIMEOUT_MS || 240_000);
@@ -81,7 +82,7 @@ for (const q of questions) {
     out[q.key] = { answer: null, conf: 'parse-miss' };
   }
 }
-const path = join(here, `answers-${label}.json`);
-writeFileSync(path, JSON.stringify(out, null, 2) + '\n');
+const path = safeChild(here, `answers-${label}.json`);
+atomicWritePrivate(path, JSON.stringify(out, null, 2) + '\n');
 const filled = questions.filter((q) => out[q.key].answer !== null).length;
 console.log(`${label}: ${filled}/${questions.length} answered  ms=${r.ms}  → ${path}`);

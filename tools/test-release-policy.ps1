@@ -127,6 +127,11 @@ foreach ($installerName in @('install.ps1')) {
   }
 }
 
+$pxpipeIntegrity='sha512-utMkpkWAjgQyldB62ebWrTFKhTmMKTiwXIktqbHxLixrtgw/g+r9/0nzG2Vz1prKSvH2Q7x9JNrG4LwEmlHQ+g=='
+$windowsInstaller=Read-Text (Join-Path $SourceRoot 'install.ps1');$unixInstaller=Read-Text (Join-Path $SourceRoot 'install.sh')
+foreach($entry in @(@('install.ps1',$windowsInstaller),@('install.sh',$unixInstaller))){$name=[string]$entry[0];$text=[string]$entry[1];Assert-True($text.Contains($pxpipeIntegrity)) "$name does not pin the reviewed pxpipe registry integrity.";Assert-True($text-match'(?i)npm\s+pack|\.path\)\s+pack|ManagerPath\s+pack') "$name does not download a reviewable pxpipe archive.";Assert-True($text-match'--ignore-scripts') "$name does not disable npm lifecycle scripts.";Assert-True($text-match'--install-strategy=nested') "$name does not require the reviewed nested dependency layout.";Assert-True($text-match'pxpipe-runtime-patch') "$name does not apply or verify the reviewed runtime patch."}
+foreach($controller in @('stack\bin\lib\pxpipe-ctl.ps1','stack\bin\pxpipe-ctl.sh')){$text=Read-Text(Join-Path $SourceRoot $controller);Assert-True($text-match'pxpipe-runtime-patch') "$controller does not gate startup on the runtime verifier.";Assert-True($text-match'\bverify\b') "$controller does not require a fully verified runtime."}
+
 foreach ($required in @(
   'LICENSE', 'NOTICE.md', 'SECURITY.md', 'CHANGELOG.md', 'VENDORED_SOURCES.json',
   'openai\native-context-compiler\package.json',
@@ -136,6 +141,10 @@ foreach ($required in @(
   'openai\native-context-compiler\src\app-server-proxy-cli.mjs',
   'openai\native-context-compiler\src\app-server-proxy-protocol.mjs',
   'openai\native-context-compiler\src\bridge-context.mjs',
+  'stack\bin\lib\pxpipe-runtime-patch.js',
+  'tools\test-pxpipe-runtime-patch.mjs',
+  'docs\SECURITY-REVIEW-0.6.4.md',
+  'docs\RELEASE-AUDIT-0.6.4.md',
   'upstream\pxpipe\LICENSE',
   'upstream\rtk\LICENSE',
   'upstream\claude-token-efficient\LICENSE'
@@ -147,8 +156,8 @@ $nccPackage = Read-Text (Join-Path $SourceRoot 'openai\native-context-compiler\p
 Assert-True ([string]$nccPackage.version -ceq $version) 'Native Context Compiler and repository versions differ.'
 Assert-True ([string]$nccPackage.dependencies.'gpt-tokenizer' -ceq '3.4.0') 'Native Context Compiler tokenizer is not exactly pinned.'
 Assert-True ([string]$nccPackage.dependencies.'@openai/codex' -ceq '0.149.0') 'Native Context Compiler Codex runtime is not exactly pinned to the tested version.'
-Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\bin') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired Codex network proxy launchers remain in the 0.6.3 source.'
-Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'plugins') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired advisory Codex plugin remains in the 0.6.3 source.'
+Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\bin') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired Codex network proxy launchers remain in the 0.6.4 source.'
+Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'plugins') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired advisory Codex plugin remains in the 0.6.4 source.'
 Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\native-context-compiler') -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
   $_.Extension -in @('.exe','.dll','.node','.wasm','.bin') -and $_.FullName -notmatch '[\\/]node_modules[\\/]'
 }).Count -eq 0) 'The Native Context Compiler authored source tree contains a compiled binary.'

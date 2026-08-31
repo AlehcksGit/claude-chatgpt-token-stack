@@ -30,7 +30,7 @@ if (-not (Test-Path -LiteralPath $NccInstaller -PathType Leaf)) {
 }
 
 Write-Host ''
-Write-Host 'ChatGPT Work / Codex low-latency stack 0.6.3' -ForegroundColor White
+Write-Host 'ChatGPT Work / Codex low-latency stack 0.6.4' -ForegroundColor White
 Write-Host '  Normal Work turns use OpenAI Codex directly.' -ForegroundColor DarkGray
 Write-Host '  Whole-turn Lean bridge: removed from normal use.' -ForegroundColor DarkGray
 Write-Host '  RTK, bounded receipts, turn budget, and compaction guidance: enabled.' -ForegroundColor DarkGray
@@ -54,7 +54,7 @@ if ($LASTEXITCODE -ne 0) { throw "Low-latency stack installation failed with exi
 Update-StackProcessPath
 $installReceipt = Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'NativeContextCompiler\install.json') -Raw | ConvertFrom-Json
 $versionOutput = (& $installReceipt.cliPath --version 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $versionOutput -ne 'native-context-compiler 0.6.3') {
+if ($LASTEXITCODE -ne 0 -or $versionOutput -ne 'native-context-compiler 0.6.4') {
   throw "Installed diagnostics verification failed: $versionOutput"
 }
 

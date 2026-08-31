@@ -21,7 +21,7 @@ $releaseManifest = [IO.File]::ReadAllText($releaseManifestPath, $Utf8Strict) | C
 $releaseExcludes = @($releaseManifest.excludePatterns | ForEach-Object { [string]$_ })
 $git = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')
-$workRoot = Join-Path $tempBase ('token-efficiency-vendor-' + [Guid]::NewGuid().ToString('N'))
+$workRoot = Join-Path $tempBase ('token-v-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
 
 function Invoke-Git([string[]]$Arguments) {
   & $git.Path @Arguments
@@ -37,7 +37,9 @@ function Get-ComparableHash([string]$Path) {
     try { return ([BitConverter]::ToString($sha.ComputeHash((New-Object Text.UTF8Encoding($false)).GetBytes($text)))).Replace('-','').ToLowerInvariant() }
     finally { $sha.Dispose() }
   } catch {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() }
+    finally { $sha.Dispose() }
   }
 }
 
@@ -111,10 +113,13 @@ try {
   if (Test-Path -LiteralPath $workRoot) {
     $resolved = [IO.Path]::GetFullPath($workRoot)
     if (-not $resolved.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-        (Split-Path -Leaf $resolved) -notmatch '^token-efficiency-vendor-[0-9a-f]{32}$') {
+        (Split-Path -Leaf $resolved) -notmatch '^token-v-[0-9a-f]{12}$') {
       throw "Refusing to clean unexpected verification directory: $resolved"
     }
-    Remove-Item -LiteralPath $resolved -Recurse -Force
+    & node -e "require('node:fs').rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })" $resolved
+    if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $resolved)) {
+      throw "Could not clean verification directory: $resolved"
+    }
   }
 }
 

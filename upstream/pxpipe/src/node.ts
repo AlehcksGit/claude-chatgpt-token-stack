@@ -1129,16 +1129,16 @@ async function main(): Promise<void> {
   // resolve the bearer per request from the file instead, which keeps rotation
   // on the host with a single writer: N parallel containers refreshing their own
   // copies would rotate each other's credential out from under them.
-  // Cached on mtime, so it costs a stat per request rather than a read.
+  // Read through a validated descriptor on each request. Token files are tiny;
+  // avoiding a check-then-read cache race matters more than saving one read.
   const authTokenFile = process.env.ANTHROPIC_OAUTH_TOKEN_FILE?.trim() || undefined;
   let authTokenCache: { mtimeMs: number; token: string } | undefined;
   const anthropicAuthToken = authTokenFile
     ? (): string | undefined => {
         try {
-          const { mtimeMs } = fs.statSync(authTokenFile);
-          if (authTokenCache?.mtimeMs !== mtimeMs) {
-            authTokenCache = { mtimeMs, token: fs.readFileSync(authTokenFile, 'utf8').trim() };
-          }
+          const result = readStableRegularFile(authTokenFile, 64 * 1024);
+          if (result.kind !== 'ok') return authTokenCache?.token;
+          authTokenCache = { mtimeMs: result.mtimeMs, token: result.data.toString('utf8').trim() };
           return authTokenCache.token || undefined;
         } catch {
           // Mid-rotation the writer may have unlinked it; last good beats none.
@@ -1435,3 +1435,4 @@ main().catch((err) => {
   console.error('[pxpipe] fatal:', err);
   process.exit(1);
 });
+import { readStableRegularFile } from './safe-fs.js';

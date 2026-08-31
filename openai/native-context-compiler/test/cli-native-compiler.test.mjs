@@ -53,11 +53,11 @@ test('CLI native compiler rejects unknown options with exit code 2', async () =>
   assert.match(result.stderr, /Unknown native-compiler option/);
 });
 
-test('CLI reports the 0.6.3 release version', async () => {
+test('CLI reports the 0.6.4 release version', async () => {
   const result = await runCli(['--version']);
   assert.equal(result.code, 0);
   assert.equal(result.stderr, '');
-  assert.equal(result.stdout.trim(), 'native-context-compiler 0.6.3');
+  assert.equal(result.stdout.trim(), 'native-context-compiler 0.6.4');
 });
 
 test('CLI retrieves exact compiler evidence by handle', async () => {

@@ -125,7 +125,7 @@ async function callClaudeCli(body, model) {
     for (const blk of content) {
       if (blk.type === 'image') {
         const p = join(tmpdir(), `eval-img-${randomUUID()}.png`);
-        writeFileSync(p, Buffer.from(blk.source.data, 'base64'));
+        writeFileSync(p, Buffer.from(blk.source.data, 'base64'), { flag: 'wx', mode: 0o600 });
         tmpFiles.push(p);
         imageCount++;
         contentParts.push(`[IMAGE #${imageCount} — file: ${p}]`);

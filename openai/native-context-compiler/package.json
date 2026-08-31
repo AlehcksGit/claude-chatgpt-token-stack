@@ -1,6 +1,6 @@
 {
   "name": "native-context-compiler",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "type": "module",
   "description": "Local ChatGPT Work diagnostics with native-fast defaults and optional experimental token-reduction tools.",

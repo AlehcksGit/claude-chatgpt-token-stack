@@ -51,6 +51,8 @@ $WarpErr  = Join-Path $PxDir "warpd.err.log"
 $Events   = Join-Path $PxDir "events.jsonl"
 $WarpdTs  = Join-Path $PSScriptRoot "warpd\warpd.ts"
 $MonJs    = Join-Path $PSScriptRoot "monitor.js"
+$RuntimePatcher = Join-Path $PSScriptRoot "pxpipe-runtime-patch.js"
+$RuntimePatcherSha256 = 'f5f0b732dcc99b4c0b8aea64c31bddeac47fe32ee54a81215636e4c0966c9e46'
 $MonLog   = Join-Path $PxDir "monitor.log"
 $Self     = $PSCommandPath
 $HookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$Self`" start -Quiet"
@@ -229,9 +231,11 @@ function Http($url, $timeoutSec = 3, [string]$Nonce = '') {
   } catch { return $null }
 }
 function Get-PxpipeCli {
-  $guess = Join-Path $env:APPDATA "npm\node_modules\pxpipe-proxy\bin\cli.js"
-  if (Test-Path $guess) { return $guess }
-  if (Have npm) { $root = (& npm root -g 2>$null); if ($root) { $p = Join-Path $root "pxpipe-proxy\bin\cli.js"; if (Test-Path $p) { return $p } } }
+  if (-not (Have node) -or -not (Test-Path -LiteralPath $RuntimePatcher -PathType Leaf)) { return $null }
+  if ((Get-FileHash -LiteralPath $RuntimePatcher -Algorithm SHA256).Hash.ToLowerInvariant() -cne $RuntimePatcherSha256) { return $null }
+  $roots=@();$guessRoot=Join-Path $env:APPDATA "npm\node_modules\pxpipe-proxy";$roots+=$guessRoot
+  if (Have npm) { $npmRoot = (& npm root -g 2>$null | Select-Object -First 1); if ($npmRoot) { $roots+=(Join-Path ([string]$npmRoot).Trim() 'pxpipe-proxy') } }
+  foreach($root in @($roots|Select-Object -Unique)){$cli=Join-Path $root 'bin\cli.js';if(-not(Test-Path -LiteralPath $cli -PathType Leaf)){continue};$LASTEXITCODE=0;& node $RuntimePatcher verify $root 1>$null 2>$null;if($LASTEXITCODE-eq0){return [IO.Path]::GetFullPath($cli)}}
   return $null
 }
 function Get-Version($cmd, $args_) {
@@ -824,7 +828,7 @@ function Run-Doctor {
   $nodeVersion=$null;try{$nodeVersion=[version]$nv.TrimStart('v')}catch{}
   Check "supported Node.js" ($null-ne$nodeVersion-and(Test-SupportedNodeVersion $nodeVersion)) $nv "install Node 22.7+ within 22.x, or Node 24.x, then re-run install.ps1"
   $cli = Get-PxpipeCli
-  Check "pxpipe-proxy installed" ([bool]$cli) $(if ($cli) { $cli } else { "not found under npm -g" }) "re-run install.ps1, or install exactly: npm install -g pxpipe-proxy@0.13.2"
+  Check "hardened pxpipe runtime" ([bool]$cli) $(if ($cli) { $cli } else { "missing or failed the reviewed file/dependency verification" }) "re-run install.ps1 to install and verify the pinned runtime"
   $pxRecord = Read-ServiceRecord 'pxpipe'; $pxUp = $null -ne $pxRecord -and (Test-ServiceHealth 'pxpipe' $pxRecord)
   Check "pxpipe identity + health :$Port" $pxUp $Base "pxpipe-ctl start" { Start-Proxy }
   if ($pxUp) {
