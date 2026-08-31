@@ -1,6 +1,6 @@
 # Security model
 
-Version 0.6.2 has two independent local trust boundaries. Claude uses its
+Version 0.6.3 has two independent local trust boundaries. Claude uses its
 established pxpipe/warpd proxy path. ChatGPT Work/Codex stays on native app
 traffic and uses four lightweight local hooks; its retired Lean bridge is not
 installed.

@@ -36,6 +36,11 @@ exit 0
   Assert-Equal 'claude|openai' (@(Get-Content -LiteralPath $log)-join'|') 'install-all did not run both installers in order'
   Assert-True($result.Output-match'normal Claude installer output')'Claude child output was hidden'
   Assert-True($result.Output-match'normal Codex installer output')'Codex child output was hidden'
+  Remove-Item -LiteralPath (Join-Path $fixture 'install-openai.ps1'),(Join-Path $fixture 'uninstall-openai.ps1')
+  $result=Invoke-TestPowerShell $Engine (Join-Path $fixture 'setup.ps1') @('install-claude','-TargetHome',$profile,'-Yes') $envMap
+  Assert-Equal 0 $result.Code 'Claude maintenance should work without Codex payload'
+  $result=Invoke-TestPowerShell $Engine (Join-Path $fixture 'setup.ps1') @('install-openai','-TargetHome',$profile,'-Yes') $envMap
+  Assert-True ($result.Code -ne 0 -and $result.Output -match 'full\s+extracted\s+release') "Missing Codex payload should have an actionable error: $($result.Output)"
   Write-Host "PASS setup front-end exact exit/output contract ($Engine)"
 }finally{
   if(Test-Path -LiteralPath $pidFile){$ownedPid=0;if([int]::TryParse(([IO.File]::ReadAllText($pidFile)),[ref]$ownedPid)){$sleeper=Get-Process -Id $ownedPid -ErrorAction SilentlyContinue;if($null-ne$sleeper){$sleeper.Kill();[void]$sleeper.WaitForExit(5000)}}}

@@ -147,8 +147,8 @@ $nccPackage = Read-Text (Join-Path $SourceRoot 'openai\native-context-compiler\p
 Assert-True ([string]$nccPackage.version -ceq $version) 'Native Context Compiler and repository versions differ.'
 Assert-True ([string]$nccPackage.dependencies.'gpt-tokenizer' -ceq '3.4.0') 'Native Context Compiler tokenizer is not exactly pinned.'
 Assert-True ([string]$nccPackage.dependencies.'@openai/codex' -ceq '0.149.0') 'Native Context Compiler Codex runtime is not exactly pinned to the tested version.'
-Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\bin') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired Codex network proxy launchers remain in the 0.6.2 source.'
-Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'plugins') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired advisory Codex plugin remains in the 0.6.2 source.'
+Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\bin') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired Codex network proxy launchers remain in the 0.6.3 source.'
+Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'plugins') -Recurse -File -ErrorAction SilentlyContinue).Count -eq 0) 'Retired advisory Codex plugin remains in the 0.6.3 source.'
 Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'openai\native-context-compiler') -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
   $_.Extension -in @('.exe','.dll','.node','.wasm','.bin') -and $_.FullName -notmatch '[\\/]node_modules[\\/]'
 }).Count -eq 0) 'The Native Context Compiler authored source tree contains a compiled binary.'

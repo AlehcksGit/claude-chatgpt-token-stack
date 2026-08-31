@@ -204,13 +204,17 @@ const versionText = (v) => {
   return match ? match[1] : null;
 };
 function tailBytes(p, n) {
+  let fd;
   try {
-    const st = fs.statSync(p); const fd = fs.openSync(p, "r");
+    fd = fs.openSync(p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return { text: "", bytes: 0 };
     const len = Math.min(n, st.size); const buf = Buffer.alloc(len);
-    fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd);
-    let s = buf.toString("utf8"); if (len < st.size) s = s.slice(s.indexOf("\n") + 1);
+    const read = fs.readSync(fd, buf, 0, len, st.size - len);
+    let s = buf.subarray(0, read).toString("utf8"); if (len < st.size) s = s.slice(s.indexOf("\n") + 1);
     return { text: s, bytes: st.size };
   } catch { return { text: "", bytes: 0 }; }
+  finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
 // ---- pxpipe: per-request net savings from events.jsonl (used tokens already include the image cost) ----
@@ -766,7 +770,7 @@ function createMonitorServer(listenPort) {
     const u = new URL(req.url, "http://x");
     if (u.pathname === "/api/state") {
       try { const s = await state(); res.writeHead(200, secureHeaders("application/json")); res.end(JSON.stringify(s)); }
-      catch (e) { res.writeHead(500, secureHeaders("application/json")); res.end(JSON.stringify({ error: String(e && e.message || e) })); }
+      catch { res.writeHead(500, secureHeaders("application/json")); res.end(JSON.stringify({ error: "Monitor state unavailable" })); }
       return;
     }
     if (u.pathname === "/healthz") {

@@ -29,7 +29,7 @@ foreach($file in $parseFiles){$tokens=$null;$errors=$null;[void][Management.Auto
 Run-Node @('--check',(Join-Path $repo 'stack\bin\lib\monitor.js'))
 Run-Node @('--check',(Join-Path $repo 'stack\bin\lib\warpd\warpd.ts'))
 
-$engineTests=@('test-node-contract.ps1','test-rollback-contract.ps1','test-tool-inventory.ps1','test-sibling-order.ps1','test-controller-runtime.ps1','test-setup-contract.ps1')
+$engineTests=@('test-node-contract.ps1','test-node-prerequisite.ps1','test-rollback-contract.ps1','test-tool-inventory.ps1','test-sibling-order.ps1','test-controller-runtime.ps1','test-setup-contract.ps1')
 foreach($engine in @($PowerShell5,$PowerShell7)){
   foreach($test in $engineTests){Run-Child $engine (Join-Path $PSScriptRoot $test) @('-Engine',$engine)}
 }

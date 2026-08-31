@@ -1,6 +1,6 @@
 # Dual-stack boundaries
 
-Version 0.6.2 keeps ChatGPT Work on native Codex and installs four low-latency
+Version 0.6.3 keeps ChatGPT Work on native Codex and installs four low-latency
 hooks. Automatic whole-turn Lean routing is disabled.
 
 | Surface | Automatic reduction | Manual/diagnostic path | Authentication | Local port |

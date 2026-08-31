@@ -6,9 +6,12 @@ Claude gets three complementary layers: concise project guidance, RTK command-ou
 
 > **License:** source is provided for individual personal use. Read [LICENSE](LICENSE) before installing, redistributing, or adapting it.
 
-The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.2.
+The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.3.
 
-**Current release: 0.6.2** - see [CHANGELOG.md](CHANGELOG.md).
+**Current release: 0.6.3** - see [CHANGELOG.md](CHANGELOG.md).
+Read the [security review and remaining risks](docs/SECURITY-REVIEW-0.6.3.md)
+before installing. A successful security-scan run is not a zero-finding result;
+the pinned npm runtime does not inherit the vendored source-only fixes.
 
 ## Why this exists
 
@@ -79,6 +82,15 @@ ChatGPT subscription traffic cannot be safely redirected through the Claude prox
 .\setup.cmd status           # status for both sides
 ```
 
+On Windows, setup installs **Node.js 24.19.0 LTS and npm automatically if Node
+is missing**, using a checksum-verified installer from nodejs.org. Windows may
+ask for administrator approval. Existing Node 22.7+ within 22.x or Node 24.x is
+kept; other versions are preserved and setup explains how to correct them.
+Node remains installed when this stack is removed because other apps may use it.
+RTK requires Microsoft's App Installer (`winget`); Codex-only setup installs RTK
+0.45.0 too. Downloads require internet access. See [the release audit](docs/RELEASE-AUDIT-0.6.3.md)
+for verification scope and limitations.
+
 After installation:
 
 - **Claude:** run `pxpipe-ctl doctor`, then open `http://127.0.0.1:47821/`. The doctor checks the rules, RTK, pxpipe, warpd, settings, and managed startup. Restart Claude if it was already open.
@@ -86,7 +98,7 @@ After installation:
 
 The installers preserve unrelated Claude settings, Codex hooks, model choices, plugins, and user-authored rule content. Every managed change has an ownership receipt and baseline backup so each side can be removed independently.
 
-On Linux or macOS, `./install.sh` and `./uninstall.sh` provide the tested Claude-only lifecycle. The OpenAI side remains Windows-only in 0.6.2.
+On Linux or macOS, `./install.sh` and `./uninstall.sh` provide the tested Claude-only lifecycle. The OpenAI side remains Windows-only in 0.6.3.
 
 ## Local, reversible, and inspectable
 
@@ -135,7 +147,7 @@ ncc benchmark
 
 ## Requirements and scope
 
-- Full stack: Windows 10/11, Node.js 22.7+ or 24.x, ChatGPT/Codex desktop or CLI, plus the normal Claude prerequisites when installing that side.
+- Full stack: Windows 10/11 x64 or ARM64, Microsoft App Installer (winget), Node.js 22.7+ within 22.x or 24.x (installed automatically if missing), ChatGPT/Codex desktop or CLI, plus the normal Claude prerequisites when installing that side.
 - Claude-only Unix path: Linux or macOS with Bash, Node.js, and the normal Claude prerequisites, using `install.sh` and `uninstall.sh`.
 - The OpenAI side covers local **Work** tasks on ChatGPT Pro or an eligible higher-tier workspace subscription. Ordinary Chat conversations, remote/cloud tasks, and API-key usage are not covered. The model and reasoning effort you pick in the app are preserved.
 - Running only the OpenAI installer does not modify or restart Claude, pxpipe, warpd, or the shared monitor.

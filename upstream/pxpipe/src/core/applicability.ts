@@ -1,5 +1,7 @@
 /** Applicability helpers for pxpipe's production-safe model scope. */
 
+import { stripVariantTags } from './safe-text.js';
+
 import { isMisresolvedModelId } from './gpt-model-profiles.js';
 
 export type PxpipeApplicabilityReason =
@@ -17,10 +19,8 @@ export interface PxpipeApplicabilityInput {
 }
 
 /** Bracketed variant tags (e.g. `[1m]`) stripped before model matching so base and variant gate identically. */
-const VARIANT_TAG = /\[[^\]]*\]/g;
-
 function baseModelId(model: string): string {
-  return model.replace(VARIANT_TAG, '');
+  return stripVariantTags(model);
 }
 
 /** Dashboard runtime override; null = fall back to PXPIPE_MODELS env / built-in default. In-memory only. */

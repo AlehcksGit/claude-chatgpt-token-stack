@@ -3,7 +3,7 @@
 ## Supported release
 
 Version 0.6.x is supported. Earlier private, 0.2.x, 0.3.x, 0.4.x, or 0.5.x builds
-should be upgraded with the 0.6.2 installer so obsolete Codex provider state
+should be upgraded with the 0.6.3 installer so obsolete Codex provider state
 is retired and the reviewed native Work hook stack is installed safely.
 
 ## Reporting

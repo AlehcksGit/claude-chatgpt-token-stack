@@ -1,6 +1,6 @@
 {
   "name": "native-context-compiler",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "type": "module",
   "description": "Local ChatGPT Work diagnostics with native-fast defaults and optional experimental token-reduction tools.",
@@ -25,6 +25,6 @@
     "gpt-tokenizer": "3.4.0"
   },
   "engines": {
-    "node": ">=22.7"
+    "node": "^22.7.0 || ^24.0.0"
   }
 }

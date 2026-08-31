@@ -75,5 +75,17 @@ try {
   $px=New-PxFixture 'pxpipe-claude-first';$result=Invoke-TestPowerShell $Engine $install @('-TargetHome',$px.Profile,'-SkipRtk','-SkipRules','-NoDesktop','-NoPath') $px.Environment;Assert-Equal 0 $result.Code "Claude pxpipe install failed: $($result.Output)"
   $open=Add-OpenAiReceipt $px.Profile;$result=Invoke-TestPowerShell $Engine $uninstall @('-TargetHome',$px.Profile,'-RemoveTools') $px.Environment;Assert-Equal 2 $result.Code 'active OpenAI sibling did not retain pxpipe';Assert-True(Test-Path -LiteralPath(Join-Path $px.Root 'pxpipe-proxy\package.json'))'active sibling lost pxpipe package';Assert-True(Test-Path -LiteralPath(Join-Path $px.Prefix 'pxpipe.cmd'))'active sibling lost pxpipe shim'
   Remove-Item -LiteralPath $open.Plugin,$open.Launcher -Force;$result=Invoke-TestPowerShell $Engine $uninstall @('-TargetHome',$px.Profile,'-RemoveTools') $px.Environment;Assert-Equal 0 $result.Code "inactive sibling blocked pxpipe exact removal: $($result.Output)";Assert-True(-not(Test-Path -LiteralPath(Join-Path $px.Prefix 'pxpipe.cmd')))'owned pxpipe shim remained after sibling became inactive';Assert-True(Test-Path -LiteralPath $open.Receipt)'Claude pxpipe cleanup changed OpenAI receipt'
+  $fixture=New-Fixture 'native-ncc' $false
+  $result=Invoke-TestPowerShell $Engine $install @('-TargetHome',$fixture.Profile,'-SkipPxpipe','-SkipRules','-NoHook','-NoDesktop','-NoPath') $fixture.Environment
+  Assert-Equal 0 $result.Code "Native sibling fixture failed: $($result.Output)"
+  $nativeDir=Join-Path $fixture.Profile '.codex';[void](New-Item -ItemType Directory -Path $nativeDir -Force)
+  $nativeHooks=Join-Path $nativeDir 'hooks.json'
+  [IO.File]::WriteAllText($nativeHooks,'{"hooks":{"PreToolUse":[{"hooks":[{"command":"node codex-hook.mjs"}]}]}}')
+  $result=Invoke-TestPowerShell $Engine $uninstall @('-TargetHome',$fixture.Profile,'-RemoveTools') $fixture.Environment
+  Assert-Equal 2 $result.Code 'Native NCC hooks must preserve shared RTK'
+  Assert-True (Test-Path -LiteralPath $fixture.Tool) 'Native NCC lost RTK'
+  Remove-Item -LiteralPath $nativeHooks
+  $result=Invoke-TestPowerShell $Engine $uninstall @('-TargetHome',$fixture.Profile,'-RemoveTools') $fixture.Environment
+  Assert-Equal 0 $result.Code 'Inactive native NCC must not permanently retain owned RTK'
   Write-Host "PASS sibling order ($Engine)"
 }finally{Remove-TestSuiteRoot $suiteRoot}

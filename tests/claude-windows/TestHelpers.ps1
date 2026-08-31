@@ -16,15 +16,15 @@ function Assert-Equal($Expected, $Actual, [string]$Message) {
 }
 
 function New-TestSuiteRoot([string]$Label) {
-  $base = Join-Path ([IO.Path]::GetTempPath()) 'claude-token-stack-isolated-tests'
+  $base = Join-Path ([IO.Path]::GetTempPath()) 'cts-tests'
   if (-not (Test-Path -LiteralPath $base)) { New-Item -ItemType Directory -Path $base -Force | Out-Null }
-  $path = Join-Path $base ($Label + '-' + [Guid]::NewGuid().ToString('N'))
+  $path = Join-Path $base ('t-' + [Guid]::NewGuid().ToString('N').Substring(0,16))
   New-Item -ItemType Directory -Path $path | Out-Null
   return [IO.Path]::GetFullPath($path)
 }
 
 function Remove-TestSuiteRoot([string]$Path) {
-  $base = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'claude-token-stack-isolated-tests')).TrimEnd('\') + '\'
+  $base = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'cts-tests')).TrimEnd('\') + '\'
   $full = [IO.Path]::GetFullPath($Path)
   if (-not $full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { throw "Refusing test cleanup outside $base" }
   if (-not (Test-Path -LiteralPath $full)) { return }

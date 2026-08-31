@@ -1,6 +1,6 @@
 # How version 0.6 works
 
-> **0.6.2 supported mode:** normal local Work turns stay on native Codex. Four
+> **0.6.3 supported mode:** normal local Work turns stay on native Codex. Four
 > lightweight hooks and a managed rules block operate locally. The synchronous
 > Lean/app-server bridge and `CODEX_CLI_PATH` override remain disabled.
 
@@ -121,5 +121,5 @@ subscription-quota, latency, or quality guarantees.
 ## Historical research path
 
 The source retains the whole-turn Lean compiler and app-server bridge for audit
-and controlled experiments. Version 0.6.2 does not install its launcher, set
+and controlled experiments. Version 0.6.3 does not install its launcher, set
 `CODEX_CLI_PATH`, or enable `leanBridge`. `ncc lean` remains a manual diagnostic.

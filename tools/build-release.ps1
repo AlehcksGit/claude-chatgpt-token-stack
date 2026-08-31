@@ -198,6 +198,12 @@ $sourceComponents = @($vendor.sources | ForEach-Object {
 })
 $runtimeComponents = @(
   [pscustomobject][ordered]@{
+    type='application'; 'bom-ref'='runtime:node@24.19.0'; name='Node.js'; version='24.19.0'
+    externalReferences=@([pscustomobject][ordered]@{type='distribution';url='https://nodejs.org/dist/v24.19.0/'})
+    properties=@([pscustomobject][ordered]@{name='claude-chatgpt-token-stack:component-role';value='bootstrap pin only; compatible pre-existing Node is preserved'})
+  }
+
+  [pscustomobject][ordered]@{
     type = 'application'
     'bom-ref' = 'runtime:rtk@0.45.0'
     name = 'rtk'
@@ -251,7 +257,7 @@ $sbom = [pscustomobject][ordered]@{
       'bom-ref' = 'application:claude-chatgpt-token-stack@' + $version
       name = 'claude-chatgpt-token-stack'
       version = $version
-      licenses = @([pscustomobject][ordered]@{ license=[pscustomobject][ordered]@{ id='MIT' } })
+      licenses = @([pscustomobject][ordered]@{ license=[pscustomobject][ordered]@{ name='Claude-ChatGPT Token Stack Personal Use License 1.0'; url='https://github.com/AlehcksGit/claude-chatgpt-token-stack/blob/main/LICENSE' } })
       externalReferences = @([pscustomobject][ordered]@{ type='vcs'; url='https://github.com/AlehcksGit/claude-chatgpt-token-stack' })
     }
   }
@@ -268,6 +274,7 @@ $sbom = [pscustomobject][ordered]@{
       dependsOn=@()
     }
   }) + @(
+    [pscustomobject][ordered]@{ ref='runtime:node@24.19.0'; dependsOn=@() }
     [pscustomobject][ordered]@{ ref='runtime:rtk@0.45.0'; dependsOn=@() }
     [pscustomobject][ordered]@{ ref='runtime:pxpipe-proxy@0.13.2'; dependsOn=@('runtime:gpt-tokenizer@3.4.0') }
     [pscustomobject][ordered]@{ ref='runtime:gpt-tokenizer@3.4.0'; dependsOn=@() }

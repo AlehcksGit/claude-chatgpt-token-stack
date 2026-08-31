@@ -25,8 +25,12 @@ export function removeLegacyNccHooks(document) {
   let removed = 0;
   for (const [event, groups] of Object.entries(next.hooks)) {
     if (!Array.isArray(groups)) continue;
-    const kept = groups.filter((group) => !groupContainsLegacyNccHook(group));
-    removed += groups.length - kept.length;
+    const kept = groups.flatMap((group) => {
+      if (!groupContainsLegacyNccHook(group)) return [group];
+      const hooks = group.hooks.filter((hook) => !groupContainsLegacyNccHook({ hooks: [hook] }));
+      removed += group.hooks.length - hooks.length;
+      return hooks.length ? [{ ...group, hooks }] : [];
+    });
     next.hooks[event] = kept;
   }
   return { document: next, removed };
@@ -87,16 +91,14 @@ export async function retireLegacyCodexTask({
     if (/cannot find|does not exist/i.test(`${error?.message ?? ''}\n${error?.stderr ?? ''}`)) {
       return { taskName, removed: false, reason: 'not-installed' };
     }
-    throw error;
+    return { taskName, removed: false, reason: 'query-unavailable',
+      warning: 'Legacy task inventory was unavailable; no scheduled task was changed.' };
   }
   await mkdir(backupRoot, { recursive: true });
   const backup = path.join(backupRoot, 'ClaudeChatGPTTokenStack-CodexProxy.xml');
   await writeFile(backup, queried.stdout);
-  await run('schtasks.exe', ['/Delete', '/TN', taskName, '/F'], {
-    windowsHide: true,
-    shell: false,
-  });
-  return { taskName, removed: true, backup };
+  return { taskName, removed: false, backup, reason: 'ownership-unverified',
+    warning: 'A legacy-named task was preserved. Review the backed-up task action before disabling or deleting it.' };
 }
 
 export async function migrateCodexInstallation({
@@ -156,7 +158,8 @@ export async function migrateCodexInstallation({
   const localBin = path.join(userProfile, '.local', 'bin');
   for (const name of ['codex-px.cmd', 'codex-px.ps1']) {
     const file = path.join(localBin, name);
-    if (await readOptional(file) !== null) {
+    const launcherText = await readOptional(file);
+    if (launcherText !== null && /(?:\.openai-token-stack|claude-chatgpt-token-stack)/i.test(launcherText)) {
       const backup = await backUp(file, backupRoot);
       await rm(file);
       retiredLaunchers.push({ file, backup });
