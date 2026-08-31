@@ -1,4 +1,4 @@
-param([string]$Engine)
+param([string]$Engine = ([Diagnostics.Process]::GetCurrentProcess().MainModule.FileName))
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
 . (Join-Path $RepoRoot 'stack\bin\lib\node-prerequisite.ps1')
