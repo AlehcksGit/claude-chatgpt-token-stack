@@ -9,7 +9,7 @@ import { installCodexStack } from './install-codex-stack.mjs';
 import { uninstallDesktopBridge } from './install-desktop-bridge.mjs';
 
 const execFileAsync = promisify(execFile);
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function findNpmCli() {
@@ -42,11 +42,12 @@ async function findGlobalInstall(npmCli) {
 }
 
 export async function installAll({
+  skipLegacyMigration = false,
   migrateCodex = migrateCodexInstallation,
   installStack = installCodexStack,
   restoreBridge = uninstallDesktopBridge,
 } = {}) {
-  if (process.platform !== 'win32') throw new Error('The all-in-one 0.6.2 installer currently supports Windows only');
+  if (process.platform !== 'win32') throw new Error('The all-in-one 0.6.3 installer currently supports Windows only');
   const npmCli = await findNpmCli();
   await execFileAsync(process.execPath, [npmCli, 'install', '--global', projectRoot, '--ignore-scripts', '--install-links'], {
     cwd: projectRoot,
@@ -63,7 +64,7 @@ export async function installAll({
   if (verification.stdout.trim() !== `native-context-compiler ${VERSION}`) {
     throw new Error(`Version verification failed: ${verification.stdout.trim()}`);
   }
-  const migration = await migrateCodex();
+  const migration = skipLegacyMigration ? { skipped: true } : await migrateCodex();
   const desktopBridge = await restoreBridge();
   const stack = await installStack({
     nodePath: process.execPath,
@@ -91,7 +92,7 @@ export async function installAll({
 const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
 if (entryPath && fileURLToPath(import.meta.url) === entryPath) {
   try {
-    const receipt = await installAll();
+    const receipt = await installAll({ skipLegacyMigration: process.argv.includes('--skip-legacy-migration') });
     process.stdout.write(`${JSON.stringify({ installed: true, receipt }, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`${JSON.stringify({

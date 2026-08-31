@@ -4,7 +4,31 @@ All notable changes are documented here. This project uses semantic
 versioning for the integration layer; vendored projects keep their own
 versions and provenance.
 
-## Unreleased
+## 0.6.3 - 2026-08-31
+
+### Installer and audit fixes
+
+- Windows Claude and Codex setup now install Node.js 24.19.0 LTS with npm if
+  Node is absent. Official x64/ARM64 MSI downloads are SHA-256 verified before
+  execution. Compatible existing Node installations are preserved; unsupported
+  versions or missing npm fail before stack configuration starts. Windows may
+  request administrator approval. Shared Node is retained on stack uninstall.
+- Codex-only setup also provisions pinned RTK 0.45.0 through official winget
+  inventory. Claude removal retains RTK while native Codex hooks still need it.
+- OpenAI dry-run works without Node, SkipLegacyMigration is honored, and final
+  diagnostics resolve the installed CLI from its receipt instead of stale PATH.
+- Fixed a stale function call that broke Codex uninstall. Removal now preserves
+  unrelated handlers inside mixed hook groups and clears the active install
+  receipt while retaining evidence, settings, and recoverable backups.
+- Legacy scheduled tasks without ownership proof are backed up and preserved.
+  Review their action before manually retiring them. Migration no longer treats
+  a task name as sufficient permission to delete it.
+- The installed Claude maintenance menu no longer requires absent Codex files
+  just to open. Codex actions require setup from the full extracted release.
+- Corrected the pxpipe provenance notice and the SBOM's integration license.
+  Added prerequisite, mixed-hook, uninstall, and shared-RTK regression coverage.
+  Isolated Windows test homes use shorter names to fit PowerShell 5.1 limits.
+
 
 ### Added
 

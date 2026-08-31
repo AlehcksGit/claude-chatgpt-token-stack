@@ -6,7 +6,7 @@ projects. Their copyrights and licenses remain their own. Exact source commits
 and machine-readable patch notes are also recorded in
 `VENDORED_SOURCES.json`.
 
-The 0.6.2 Native Context Compiler uses the npm package `gpt-tokenizer` 3.4.0
+The 0.6.3 Native Context Compiler uses the npm package `gpt-tokenizer` 3.4.0
 (MIT) for local estimates. It makes no provider request and is included from the
 locked dependency declared under `openai/native-context-compiler`.
 
@@ -18,7 +18,7 @@ declared package during installation.
 ## pxpipe
 
 - Source: https://github.com/teamchong/pxpipe
-- Commit: `bfaaca439eaa3acec54fd7a18f7ed27bfc509bac`
+- Commit: `3425cc83b676f9df540c0adebaaaf96a11abee76`
 - Package version: `0.13.2`
 - Copyright (c) 2026 claude-image-proxy contributors
 - License: MIT (`upstream/pxpipe/LICENSE`)
@@ -85,3 +85,12 @@ Personal Use License (individuals only, personal non-commercial use; see
 LICENSE). Vendored third-party components keep their own licenses listed
 above. This project is independent and is not affiliated with, endorsed by,
 or sponsored by Anthropic, OpenAI, the pxpipe maintainers, drona23, or rtk-ai.
+
+## Node.js installer prerequisite (not vendored)
+
+Windows setup downloads Node.js 24.19.0 from https://nodejs.org/dist/v24.19.0/
+only when Node is absent. The x64/ARM64 MSI SHA-256 pins live in
+`stack/bin/lib/node-prerequisite.ps1`; they match the official distribution
+checksums and Microsoft winget manifests. Node.js has its own license and
+third-party notices: https://github.com/nodejs/node/blob/v24.19.0/LICENSE.
+The MSI is deleted after setup, and the shared runtime is retained on uninstall.

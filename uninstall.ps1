@@ -491,15 +491,24 @@ function Test-OpenAiProcessActive {
   }catch{return $false}
 }
 function Get-OpenAiSiblingNeeds {
+  $nativeNeedsRtk=$false
+  $nativeHooks=Join-Path $TargetHome '.codex\hooks.json'
+  if(Test-Path -LiteralPath $nativeHooks -PathType Leaf){
+    try{
+      Assert-SafePath $nativeHooks
+      $nativeText=[IO.File]::ReadAllText($nativeHooks,$Utf8Strict)
+      $nativeNeedsRtk=$nativeText.Contains('codex-hook.mjs')
+    }catch{$nativeNeedsRtk=$true}
+  }
   $receiptPath=Join-Path $TargetHome '.openai-token-stack\receipt.json';$baselinePath=Join-Path $TargetHome '.openai-token-stack\baseline\receipt.json'
-  if(-not(Test-Path -LiteralPath $receiptPath -PathType Leaf)){return [pscustomobject]@{rtk=$false;pxpipe=(Test-OpenAiProcessActive);reason='no active OpenAI install receipt'}}
+  if(-not(Test-Path -LiteralPath $receiptPath -PathType Leaf)){return [pscustomobject]@{rtk=$nativeNeedsRtk;pxpipe=(Test-OpenAiProcessActive);reason='native Codex hook state; no legacy OpenAI receipt'}}
   try{
     $openReceipt=Read-Json $receiptPath;$openBaseline=Read-Json $baselinePath
     if($null-eq$openReceipt-or$null-eq$openBaseline-or[int]$openReceipt.schemaVersion-ne3-or[int]$openBaseline.schemaVersion-ne3-or-not(Test-ReceiptSeal $openReceipt)-or-not(Test-ReceiptSeal $openBaseline)){throw 'receipt integrity failed'}
     foreach($value in @($openReceipt,$openBaseline)){if(-not([IO.Path]::GetFullPath([string]$value.targetHome)).Equals($TargetHome,[StringComparison]::OrdinalIgnoreCase)){throw 'receipt targets another profile'}}
     if([string]$openReceipt.installId-cne[string]$openBaseline.installId){throw 'receipt ids differ'}
     if([bool]$openReceipt.inProgress){return [pscustomobject]@{rtk=$true;pxpipe=$true;reason='OpenAI install is in progress'}}
-    $needRtk=$false;$needPxpipe=Test-OpenAiProcessActive
+    $needRtk=$nativeNeedsRtk;$needPxpipe=Test-OpenAiProcessActive
     $managedStates=@()
     if($null-ne$openReceipt.artifacts.plugin){$managedStates+=,$openReceipt.artifacts.plugin}
     $managedStates+=@($openReceipt.artifacts.launchers);$managedStates+=@($openReceipt.artifacts.rtk)

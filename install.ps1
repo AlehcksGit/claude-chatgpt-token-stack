@@ -305,7 +305,7 @@ function Add-PathSegment([AllowNull()]$Raw,[string]$Segment) { $wasNull=$null-eq
 function Build-DesiredTree([string]$Destination) {
   Ensure-SafeDirectory $Destination;Ensure-SafeDirectory (Join-Path $Destination 'upstream\claude-token-efficient')
   foreach($name in @('install.ps1','uninstall.ps1','setup.ps1','setup.cmd','install.sh','stack','docs','NOTICE.md','LICENSE')){$source=Join-Path $Repo $name;if(Test-Path -LiteralPath $source){$state=Get-PathState $source;Copy-State $source (Join-Path $Destination $name)}}
-  $profiles=Join-Path $Repo 'upstream\claude-token-efficient\profiles';if(Test-Path -LiteralPath $profiles){Copy-State $profiles (Join-Path $Destination 'upstream\claude-token-efficient\profiles')}
+  $profiles=Join-Path $Repo 'upstream\claude-token-efficient\profiles' ;if(Test-Path -LiteralPath $profiles){Copy-State $profiles (Join-Path $Destination 'upstream\claude-token-efficient\profiles')}
 }
 function Prepare-Artifact($Baseline,$Receipt,[string]$Id,[string]$Component,[string]$Desired,[bool]$AllowExisting,[bool]$Force) {
   $target=Get-AllowlistedTarget $Id;$desiredState=Get-PathState $Desired;$base=Capture-Baseline $Baseline $Id $target $Component;$current=Get-PathState $target;$managed=Get-ManagedArtifact $Receipt $Id
@@ -363,6 +363,11 @@ function Rollback-Operations($Journal) {
 
 foreach($required in @('stack\CLAUDE.md','stack\RTK.md','stack\bin\lib\pxpipe-ctl.ps1','stack\bin\lib\warpd\warpd.ts','stack\bin\lib\monitor.js','docs\HOW-IT-WORKS.md')){if(-not(Test-Path -LiteralPath (Join-Path $Repo $required))){throw "Missing $required; run from the extracted repository."}}
 if(-not$TargetHome.Equals($CurrentHome,[StringComparison]::OrdinalIgnoreCase)-and-not$NoPath-and-not$SkipPxpipe){throw 'Alternate TargetHome installs require -NoPath so the real user PATH is never changed.'}
+# Resolve shared prerequisites before creating receipts, journals, or configuration.
+if(-not$SkipPxpipe){
+  . (Join-Path $Repo 'stack\bin\lib\node-prerequisite.ps1')
+  [void](Ensure-StackNode)
+}
 Assert-SafePath $StateRoot
 $LifecycleLockStream=Enter-LifecycleLock
 $journal=$null;$baseline=$null;$receipt=$null

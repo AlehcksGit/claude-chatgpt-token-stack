@@ -32,7 +32,7 @@ import {
 import { ensureSettings, readSettings, updateSettings } from './settings.mjs';
 import { recordWholeTurnEvaluation } from './turn-telemetry.mjs';
 
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 const execFileAsync = promisify(execFile);
 
 function writeLine(stream, line) {

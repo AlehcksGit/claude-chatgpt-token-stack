@@ -1,9 +1,9 @@
 import { access, copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { removeLegacyNccHooks } from './migrate-codex.mjs';
 import { dataRoot, settingsPath as defaultSettingsPath } from '../src/paths.mjs';
 import { ensureSettings, updateSettings } from '../src/settings.mjs';
 
-const COMMAND_MARKER = 'codex-hook.mjs';
 export const AGENTS_START = '<!-- native-context-compiler:work-efficiency:start -->';
 export const AGENTS_END = '<!-- native-context-compiler:work-efficiency:end -->';
 
@@ -17,13 +17,6 @@ function quote(value) {
 
 function object(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function groupContainsNcc(group) {
-  return Array.isArray(group?.hooks) && group.hooks.some((hook) => (
-    String(hook?.command ?? '').includes(COMMAND_MARKER)
-      || String(hook?.commandWindows ?? '').includes(COMMAND_MARKER)
-  ));
 }
 
 function handler({ nodePath, hookScript, statusMessage, additionalContextLimit, timeout = 15 }) {
@@ -65,11 +58,13 @@ export function buildCodexHookGroups({ nodePath, hookScript, enableLeanBridge = 
 
 export function mergeCodexHooks(existing, groups) {
   if (!object(existing)) throw new Error('Codex hooks.json must contain a JSON object');
-  const next = structuredClone(existing);
+  const next = removeLegacyNccHooks(existing).document;
+  if (next.hooks != null && !object(next.hooks)) throw new Error('Codex hooks must be an object; existing file preserved');
   if (!object(next.hooks)) next.hooks = {};
   for (const [event, additions] of Object.entries(groups)) {
-    const current = Array.isArray(next.hooks[event]) ? next.hooks[event] : [];
-    next.hooks[event] = [...current.filter((entry) => !groupContainsNcc(entry)), ...additions];
+    if (next.hooks[event] != null && !Array.isArray(next.hooks[event])) throw new Error(`Codex ${event} hooks must be an array; existing file preserved`);
+    const current = next.hooks[event] ?? [];
+    next.hooks[event] = [...current, ...additions];
   }
   if (!next.description) next.description = 'User lifecycle hooks.';
   return next;

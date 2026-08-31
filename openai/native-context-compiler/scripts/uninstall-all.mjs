@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { access, copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -32,17 +32,21 @@ async function findNpmCli() {
   throw new Error('npm-cli.js was not found; remove native-context-compiler with npm when npm is available');
 }
 
-export async function uninstallAll({ removePackage = true } = {}) {
-  const home = process.env.USERPROFILE || process.env.HOME;
+export async function uninstallAll({
+  removePackage = true,
+  home = process.env.USERPROFILE || process.env.HOME,
+  localDataRoot = dataRoot(),
+  restoreBridge = uninstallDesktopBridge,
+} = {}) {
   if (!home) throw new Error('USERPROFILE or HOME is required');
   const hooksFile = path.join(home, '.codex', 'hooks.json');
   const source = await readOptional(hooksFile);
   let hookRemoved = 0, backup = null;
   if (source !== null) {
-    const result = removeCompilerHook(JSON.parse(source));
+    const result = removeLegacyNccHooks(JSON.parse(source));
     hookRemoved = result.removed;
     if (hookRemoved) {
-      const backupRoot = path.join(dataRoot(), 'backups', `uninstall-${new Date().toISOString().replaceAll(':', '-')}`);
+      const backupRoot = path.join(localDataRoot, 'backups', `uninstall-${new Date().toISOString().replaceAll(':', '-')}`);
       await mkdir(backupRoot, { recursive: true });
       backup = path.join(backupRoot, 'hooks.json');
       await copyFile(hooksFile, backup);
@@ -56,7 +60,7 @@ export async function uninstallAll({ removePackage = true } = {}) {
   if (agentsSource !== null) {
     const next = removeAgentsBlock(agentsSource);
     if (next !== agentsSource) {
-      const backupRoot = path.join(dataRoot(), 'backups', `uninstall-${new Date().toISOString().replaceAll(':', '-')}`);
+      const backupRoot = path.join(localDataRoot, 'backups', `uninstall-${new Date().toISOString().replaceAll(':', '-')}`);
       await mkdir(backupRoot, { recursive: true });
       agentsBackup = path.join(backupRoot, 'AGENTS.md');
       await copyFile(agentsFile, agentsBackup);
@@ -64,11 +68,12 @@ export async function uninstallAll({ removePackage = true } = {}) {
       agentsBlockRemoved = true;
     }
   }
-  const desktopBridge = await uninstallDesktopBridge();
+  const desktopBridge = await restoreBridge();
   if (removePackage) {
     const npmCli = await findNpmCli();
     await execFileAsync(process.execPath, [npmCli, 'uninstall', '--global', 'native-context-compiler'], { windowsHide: true, shell: false, maxBuffer: 16 * 1024 * 1024 });
   }
+  await rm(path.join(localDataRoot, 'install.json'), { force: true });
   return { removed: true, hookRemoved, agentsBlockRemoved, desktopBridge, packageRemoved: removePackage, dataPreserved: true, backup, agentsBackup };
 }
 

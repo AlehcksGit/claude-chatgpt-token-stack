@@ -101,7 +101,7 @@ test('migration removes obsolete Codex integrations with recoverable backups', a
   }
 });
 
-test('legacy Codex task retirement backs up before deleting', async () => {
+test('legacy-named tasks are backed up but never deleted without ownership proof', async () => {
   if (process.platform !== 'win32') return;
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncc-task-retire-'));
   const calls = [];
@@ -113,8 +113,9 @@ test('legacy Codex task retirement backs up before deleting', async () => {
         return args[0] === '/Query' ? { stdout: Buffer.from('<Task />', 'utf16le') } : { stdout: '' };
       },
     });
-    assert.equal(result.removed, true);
-    assert.deepEqual(calls.map((call) => call.args[0]), ['/Query', '/Delete']);
+    assert.equal(result.removed, false);
+    assert.equal(result.reason, 'ownership-unverified');
+    assert.deepEqual(calls.map((call) => call.args[0]), ['/Query']);
     assert.deepEqual(await readFile(result.backup), Buffer.from('<Task />', 'utf16le'));
   } finally {
     await rm(root, { recursive: true, force: true });

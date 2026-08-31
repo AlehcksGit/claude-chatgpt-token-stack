@@ -86,7 +86,7 @@ export class CodexAppServerClient {
         clientInfo: {
           name: 'native_context_compiler',
           title: 'Native Context Compiler',
-          version: '0.6.2',
+          version: '0.6.3',
         },
         capabilities: {
           experimentalApi: true,

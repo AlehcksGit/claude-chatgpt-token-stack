@@ -25,33 +25,41 @@ $NccInstaller = Join-Path $Repo 'openai\native-context-compiler\scripts\install-
 if ($TargetHome -ne $CurrentHome) {
   throw 'The Codex installer operates on the signed-in Windows user only.'
 }
-$node = Get-Command node.exe -ErrorAction SilentlyContinue
-if ($null -eq $node) { throw 'Node.js was not found. Install Node.js 22.7+ or 24.x first.' }
 if (-not (Test-Path -LiteralPath $NccInstaller -PathType Leaf)) {
   throw "Native Context Compiler payload is missing: $NccInstaller"
 }
 
 Write-Host ''
-Write-Host 'ChatGPT Work / Codex low-latency stack 0.6.2' -ForegroundColor White
+Write-Host 'ChatGPT Work / Codex low-latency stack 0.6.3' -ForegroundColor White
 Write-Host '  Normal Work turns use OpenAI Codex directly.' -ForegroundColor DarkGray
 Write-Host '  Whole-turn Lean bridge: removed from normal use.' -ForegroundColor DarkGray
 Write-Host '  RTK, bounded receipts, turn budget, and compaction guidance: enabled.' -ForegroundColor DarkGray
 
 if ($DryRun) {
+  Write-Host "  [dry-run] verify Node.js/npm; install verified Node.js 24.19.0 LTS if absent"
+  Write-Host "  [dry-run] verify RTK; install pinned RTK 0.45.0 with winget if absent"
   Write-Host "  [dry-run] node $NccInstaller"
   Write-Host 'Dry run complete; nothing was changed.' -ForegroundColor Yellow
   exit 0
 }
 
-& $node.Source $NccInstaller
+. (Join-Path $Repo 'stack\bin\lib\node-prerequisite.ps1')
+$node = Ensure-StackNode
+. (Join-Path $Repo 'stack\bin\lib\rtk-prerequisite.ps1')
+Ensure-StackRtk
+$installerArguments = @($NccInstaller)
+if ($SkipLegacyMigration) { $installerArguments += '--skip-legacy-migration' }
+& $node.Source @installerArguments
 if ($LASTEXITCODE -ne 0) { throw "Low-latency stack installation failed with exit code $LASTEXITCODE." }
-$versionOutput = (& ncc.cmd --version 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $versionOutput -ne 'native-context-compiler 0.6.2') {
+Update-StackProcessPath
+$installReceipt = Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'NativeContextCompiler\install.json') -Raw | ConvertFrom-Json
+$versionOutput = (& $installReceipt.cliPath --version 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $versionOutput -ne 'native-context-compiler 0.6.3') {
   throw "Installed diagnostics verification failed: $versionOutput"
 }
 
 Write-Host ''
 Write-Host 'Codex low-latency mode is configured.' -ForegroundColor Green
-Write-Host 'Restart ChatGPT/Codex once so it loads the updated hooks.' -ForegroundColor Yellow
+Write-Host 'Restart ChatGPT/Codex, then review and approve the four stack hooks in /hooks before expecting hook activity.' -ForegroundColor Yellow
 Write-Host 'Claude configuration and the Claude/UE5 workflow were not changed.' -ForegroundColor DarkGray
 exit 0

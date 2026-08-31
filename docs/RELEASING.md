@@ -1,6 +1,6 @@
 # Releasing 0.6.x
 
-> **0.6.2 change:** release verification must confirm that `CODEX_CLI_PATH` is
+> **0.6.3 change:** release verification must confirm that `CODEX_CLI_PATH` is
 > restored, Lean is disabled, and four lightweight hooks remain installed.
 
 Release from a clean reviewed copy, never from a live installation directory.

@@ -26,12 +26,6 @@ $OpenAiInstaller = Join-Path $Repo 'install-openai.ps1'
 $OpenAiUninstaller = Join-Path $Repo 'uninstall-openai.ps1'
 $PowerShellHost = (Get-Process -Id $PID).Path
 
-foreach ($required in @($ClaudeInstaller,$ClaudeUninstaller,$OpenAiInstaller,$OpenAiUninstaller)) {
-  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-    throw "Setup is incomplete; missing $required"
-  }
-}
-
 function Say([string]$Message, [ConsoleColor]$Color = [ConsoleColor]::Gray) {
   Write-Host $Message -ForegroundColor $Color
 }
@@ -56,6 +50,9 @@ function Confirm-Action([string]$Prompt) {
 }
 
 function Invoke-LifecycleScript([string]$Path, [string[]]$Arguments) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "This maintenance copy does not contain $(Split-Path -Leaf $Path). Run setup.cmd from the full extracted release for this action."
+  }
   $display = Split-Path -Leaf $Path
   Say ''
   Say "  Running $display..." Cyan
