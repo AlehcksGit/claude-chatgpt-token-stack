@@ -10,7 +10,16 @@
       "license": "MIT",
       "comparisonExcludes": [
         "README.md",
-        "scripts/build.mjs"
+        "scripts/build.mjs",
+        "src/core/applicability.ts",
+        "src/core/gpt-model-profiles.ts",
+        "src/core/messages-chat-bridge.ts",
+        "src/core/proxy.ts",
+        "src/core/safe-text.ts",
+        "src/core/transform.ts",
+        "src/node.ts",
+        "src/warp/connect.ts",
+        "tests/security-hardening.test.ts"
       ],
       "comparisonOmittedRoots": [
         "dist",
@@ -30,7 +39,8 @@
         "README.md: point the excluded chart PNG at the immutable upstream commit for the source-only release",
         "scripts/build.mjs: use fileURLToPath for Windows build paths",
         "stack/bin/lib/warpd/{ca,connect,route,der}.ts: copied from src/warp with TypeScript import suffixes",
-        "stack/bin/lib/warpd/warpd.ts: adapted from src/warp/index.ts with fixed-port, verified-process, authenticated-health, and controller-owned lifecycle changes"
+        "stack/bin/lib/warpd/warpd.ts: adapted from src/warp/index.ts with fixed-port, verified-process, authenticated-health, and controller-owned lifecycle changes",
+        "0.6.3 security review: linear model/URL parsing, bounded-line environment parsing, credential-safe startup diagnostics, null-prototype forwarded headers, generic proxy errors, and regression tests; see docs/SECURITY-REVIEW-0.6.3.md"
       ]
     },
     {

@@ -1411,22 +1411,22 @@ export function extractEnvFields(dynamicText: string): EnvFields {
 
   const body = firstTagBody(dynamicText, 'env');
   if (body !== undefined) {
-    const cwd = /(?:^|\n)\s*Working directory:\s*(.+?)\s*(?:\n|$)/i.exec(body);
+    const cwd = /^[^\S\n]*Working directory:[^\S\n]*(.+)$/im.exec(body);
     if (cwd) out.cwd = cwd[1]!.trim();
-    const gitRepo = /(?:^|\n)\s*Is directory a git repo:\s*(Yes|No)\b/i.exec(body);
+    const gitRepo = /^[^\S\n]*Is directory a git repo:[^\S\n]*(Yes|No)\b/im.exec(body);
     if (gitRepo) out.isGitRepo = gitRepo[1]!.toLowerCase() === 'yes';
-    const platform = /(?:^|\n)\s*Platform:\s*(.+?)\s*(?:\n|$)/i.exec(body);
+    const platform = /^[^\S\n]*Platform:[^\S\n]*(.+)$/im.exec(body);
     if (platform) out.platform = platform[1]!.trim();
-    const osVer = /(?:^|\n)\s*OS Version:\s*(.+?)\s*(?:\n|$)/i.exec(body);
+    const osVer = /^[^\S\n]*OS Version:[^\S\n]*(.+)$/im.exec(body);
     if (osVer) out.osVersion = osVer[1]!.trim();
-    const today = /(?:^|\n)\s*Today'?s date:\s*(.+?)\s*(?:\n|$)/i.exec(body);
+    const today = /^[^\S\n]*Today'?s date:[^\S\n]*(.+)$/im.exec(body);
     if (today) out.today = today[1]!.trim();
   }
 
   // Branch may be in <git_status>, <context name="git">, or a bare "Branch:" / "On branch" line.
   const branch =
-    /(?:^|\n)\s*(?:On branch|Branch:)\s*([^\s\n]+)/i.exec(dynamicText) ??
-    /(?:^|\n)\s*Current branch:\s*([^\s\n]+)/i.exec(dynamicText);
+    /^[^\S\n]*(?:On branch|Branch:)[^\S\n]*([^\s\n]+)/im.exec(dynamicText) ??
+    /^[^\S\n]*Current branch:[^\S\n]*([^\s\n]+)/im.exec(dynamicText);
   if (branch) out.gitBranch = branch[1]!.trim();
 
   return out;

@@ -1,3 +1,5 @@
+import { trimTrailingSlashes } from './safe-text.js';
+
 /**
  * pxpipe proxy as a single Web-standard fetch handler.
  * Adapted by src/node.ts and src/worker.ts; uses only Request/Response/URL/fetch.
@@ -1333,7 +1335,7 @@ export function resolveUpstreams(config: ProxyConfig): {
   stripOpenAIV1: boolean;
 } {
   if (config.provider === 'cloudflare-ai-gateway') {
-    const base = (config.gatewayBaseUrl ?? '').trim().replace(/\/+$/, '');
+    const base = trimTrailingSlashes((config.gatewayBaseUrl ?? '').trim());
     if (!base) {
       throw new Error(
         "provider 'cloudflare-ai-gateway' requires gatewayBaseUrl (PXPIPE_GATEWAY_BASE_URL)",
@@ -1342,8 +1344,8 @@ export function resolveUpstreams(config: ProxyConfig): {
     return { anthropic: `${base}/anthropic`, openai: `${base}/openai`, stripOpenAIV1: true };
   }
   return {
-    anthropic: (config.upstream ?? DEFAULT_UPSTREAM).trim().replace(/\/+$/, ''),
-    openai: (config.openAIUpstream ?? DEFAULT_OPENAI_UPSTREAM).trim().replace(/\/+$/, ''),
+    anthropic: trimTrailingSlashes((config.upstream ?? DEFAULT_UPSTREAM).trim()),
+    openai: trimTrailingSlashes((config.openAIUpstream ?? DEFAULT_OPENAI_UPSTREAM).trim()),
     stripOpenAIV1: false,
   };
 }
@@ -1400,7 +1402,7 @@ export function createProxy(config: ProxyConfig = {}) {
   // (e.g. /openai/*, /google-ai-studio/*) safe from env whitespace — see the
   // JSDoc on resolveUpstreams for the full rationale.
   const passthroughUpstream = config.provider === 'cloudflare-ai-gateway'
-    ? (config.gatewayBaseUrl ?? '').trim().replace(/\/+$/, '')
+    ? trimTrailingSlashes((config.gatewayBaseUrl ?? '').trim())
     : upstream;
   const gatewayHeaders = config.gatewayHeaders ?? {};
   const applyGatewayHeaders = (h: Headers): Headers => {

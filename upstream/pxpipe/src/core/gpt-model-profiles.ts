@@ -1,3 +1,5 @@
+import { stripVariantTags } from './safe-text.js';
+
 /**
  * Per-model GPT rendering + vision-cost profiles.
  *
@@ -591,7 +593,7 @@ function candidateIds(m: string): string[] {
 export function resolveGptProfile(model: string | null | undefined): GptModelProfile {
   // Match applicability.ts: bracketed transport variants (for example [1m])
   // do not define a different visual reader profile.
-  const m = (model ?? '').toLowerCase().replace(/\[[^\]]*\]/g, '');
+  const m = stripVariantTags((model ?? '').toLowerCase());
   const ids = candidateIds(m);
   const geminiId = ids.find(hasGeminiMeasuredProfile);
   if (geminiId) return resolveGeminiProfile(geminiId);

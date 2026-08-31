@@ -85,7 +85,7 @@ function authority(host: string, port: string): string {
 }
 
 function forwardHeaders(headers: IncomingHttpHeaders): Record<string, string | string[]> {
-  const out: Record<string, string | string[]> = {};
+  const out: Record<string, string | string[]> = Object.create(null);
   for (const [key, value] of Object.entries(headers)) {
     if (value === undefined || HOP_HEADERS.has(key.toLowerCase())) continue;
     out[key] = value;
@@ -166,7 +166,7 @@ export function createWarpHandlers(options: WarpHandlerOptions): WarpHandlers {
       // already gone, so writing a 502 into it would throw.
       if (res.writableEnded || res.destroyed) return;
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
-      res.end(`pxpipe warp: upstream error: ${err.message}`);
+      res.end('pxpipe warp: upstream connection failed');
     });
     // An SSE completion only ends when the model stops. If the agent is killed
     // mid-stream nothing else cancels the upstream: the response keeps draining

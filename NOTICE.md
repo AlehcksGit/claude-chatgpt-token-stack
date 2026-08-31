@@ -23,10 +23,12 @@ declared package during installation.
 - Copyright (c) 2026 claude-image-proxy contributors
 - License: MIT (`upstream/pxpipe/LICENSE`)
 
-The snapshot matches that commit except for the documented Windows
-`fileURLToPath` build fix in `upstream/pxpipe/scripts/build.mjs`. The files
+The snapshot's local changes are enumerated in `VENDORED_SOURCES.json`, including
+the Windows `fileURLToPath` build fix and the 0.6.3 security-source patches
+described in `docs/SECURITY-REVIEW-0.6.3.md`. The files
 `stack/bin/lib/warpd/{ca,connect,route,der}.ts` are copied from pxpipe's
-`src/warp/` support files with local TypeScript import-suffix changes.
+`src/warp/` support files with local TypeScript import-suffix changes; `connect.ts`
+also uses a null-prototype header dictionary and fixed upstream-error text.
 `stack/bin/lib/warpd/warpd.ts` is adapted from `src/warp/index.ts` with the
 fixed-port, process-identity, authenticated-health, and controller-owned
 lifecycle changes documented in its header. Their MIT notice is also kept in

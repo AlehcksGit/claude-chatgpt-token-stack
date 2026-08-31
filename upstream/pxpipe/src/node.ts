@@ -16,7 +16,6 @@ import { isIP } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { createProxy, parseGatewayHeaders, resolveUpstreams, type ProxyConfig } from './core/proxy.js';
 import {
-  chatCompletionsUrl,
 } from './core/messages-chat-bridge.js';
 import {
   parseExportArgv,
@@ -1373,14 +1372,11 @@ async function main(): Promise<void> {
   const isLoopbackHost =
     opts.host === '127.0.0.1' || opts.host === 'localhost' || opts.host === '::1';
   const announce = () => {
-    const routes = resolveUpstreams(config);
-    console.log(`[pxpipe] anthropic upstream → ${routes.anthropic}`);
-    console.log(`[pxpipe] openai upstream → ${routes.openai}`);
+    resolveUpstreams(config);
+    console.log('[pxpipe] anthropic upstream configured (URL omitted to protect credentials)');
+    console.log('[pxpipe] openai upstream configured (URL omitted to protect credentials)');
     if (opts.cloudflareUpstream !== undefined) {
-      console.log(
-        `[pxpipe] cloudflare upstream → ${chatCompletionsUrl(opts.cloudflareUpstream)} ` +
-          `(models: ${opts.cloudflareModels?.join(', ') || 'none'})`,
-      );
+      console.log('[pxpipe] cloudflare upstream configured (URL omitted to protect credentials)');
     }
     console.log(`[pxpipe] tracking events → ${opts.eventsFile}`);
     if (opts.captureErrorReqBody) {

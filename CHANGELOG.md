@@ -8,6 +8,12 @@ versions and provenance.
 
 ### Installer and audit fixes
 
+- Hardened installed monitor/proxy diagnostics and proxy header dictionaries.
+  Vendored pxpipe parsing and startup diagnostics also have source-only fixes;
+  setup still installs the unchanged pinned npm package. The full 44-finding
+  security review, remaining risks, and exact validation scope are documented in
+  `docs/SECURITY-REVIEW-0.6.3.md`; this release is not a zero-finding certification.
+
 - Windows Claude and Codex setup now install Node.js 24.19.0 LTS with npm if
   Node is absent. Official x64/ARM64 MSI downloads are SHA-256 verified before
   execution. Compatible existing Node installations are preserved; unsupported

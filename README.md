@@ -9,6 +9,9 @@ Claude gets three complementary layers: concise project guidance, RTK command-ou
 The complete Claude + ChatGPT/Codex setup is Windows-first. Linux and macOS include tested Claude-side install/uninstall lifecycle scripts; the OpenAI Work/Codex integration remains Windows-only in 0.6.3.
 
 **Current release: 0.6.3** - see [CHANGELOG.md](CHANGELOG.md).
+Read the [security review and remaining risks](docs/SECURITY-REVIEW-0.6.3.md)
+before installing. A successful security-scan run is not a zero-finding result;
+the pinned npm runtime does not inherit the vendored source-only fixes.
 
 ## Why this exists
 

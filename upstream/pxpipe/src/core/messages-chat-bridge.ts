@@ -1,3 +1,5 @@
+import { trimTrailingSlashes } from './safe-text.js';
+
 /**
  * Anthropic Messages wire compatibility for OpenAI Chat Completions upstreams.
  *
@@ -572,7 +574,7 @@ export async function openAIChatToAnthropicResponse(
 /** Build the chat-completions endpoint URL from a user-supplied base. Accepts a
  *  bare host, a `/v1` base, or the full `/chat/completions` URL. */
 export function chatCompletionsUrl(base: string): string {
-  const b = base.replace(/\/+$/, '');
+  const b = trimTrailingSlashes(base);
   if (/\/chat\/completions$/.test(b)) return b;
   if (/\/v\d+$/.test(b)) return `${b}/chat/completions`;
   return `${b}/v1/chat/completions`;

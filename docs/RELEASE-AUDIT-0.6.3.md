@@ -26,7 +26,12 @@ No live model evaluation, credential migration, or paid API request was performe
   it gives an actionable message for operations needing the full release.
 - Corrected the pxpipe source commit notice and the SBOM's integration license;
   the personal-use license is unchanged. Node's bootstrap pin is included in the
-  SBOM. Upstream source snapshots and runtime dependency pins remain unchanged.
+  SBOM. Upstream commit and runtime dependency pins remain unchanged; additional
+  vendored source patches are recorded in `VENDORED_SOURCES.json`.
+- CodeQL findings and follow-up hardening are documented in
+  [the security review](SECURITY-REVIEW-0.6.3.md). The pinned npm runtime does not
+  inherit vendored source patches. Remaining local-file and optional-research
+  risks are disclosed; this is not a zero-finding security certification.
 
 ## Verification
 
@@ -43,15 +48,18 @@ as a claim of a fresh physical-machine installation on every architecture.
   process identity tests are included.
 - Native Context Compiler: unit and integration tests, offline benchmark safety
   gates, evidence round trips, user-detail preservation, and package dry run.
-- Vendored pxpipe: TypeScript checks, 1,203 tests, source build/version smoke
+- Vendored pxpipe: TypeScript checks, 1,209 tests, source build/version smoke
   check, and production dependency vulnerability audit.
 - All unpatched vendored files are compared with immutable upstream commits:
-  540 pxpipe files, 34 claude-token-efficient files, and 408 RTK files.
+  all files except the explicitly documented local patches and omitted roots.
 - Release policy checks include JSON/PowerShell validity, pinned actions and
   dependencies, source links, secrets patterns, provenance, and forbidden files.
   Two independent archive builds must produce identical SHA-256 hashes.
 - GitHub CI additionally exercises Linux/macOS lifecycle scripts, the supported
   Node matrix, and RTK's Rust tests/security audit on its configured platforms.
+  The matrix passed on `3035081`; subsequent security-source changes were
+  validated locally, without another Actions run. See the linked security review
+  for the exact scope and 44-finding scan disposition.
 
 ## Practical limits and follow-up
 
