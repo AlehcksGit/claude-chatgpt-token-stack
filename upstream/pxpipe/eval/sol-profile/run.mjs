@@ -8,7 +8,7 @@
  * so the images under test are not recursively transformed.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countTokens } from 'gpt-tokenizer';
@@ -20,6 +20,7 @@ import {
 } from '../../dist/core/render.js';
 import { resolveGptProfile } from '../../dist/core/gpt-model-profiles.js';
 import { visionTokensForModel } from '../../dist/core/openai.js';
+import { atomicWritePrivate, boundedResponseText, safeChild } from '../lib/io-safety.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK_DIR = join(HERE, '.work');
@@ -53,10 +54,7 @@ function sha256(value) {
 }
 
 async function writeJsonAtomic(path, value) {
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp-${process.pid}`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(tmp, path);
+  atomicWritePrivate(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function lcg(seed) {
@@ -518,7 +516,7 @@ async function callResponses(arm, sequence) {
     return { endpoint, latencyMs, status: null, headers: {}, rawBody: '', json: null, error: fetchError };
   }
 
-  const rawBody = await response.text();
+  const rawBody = await boundedResponseText(response, 16 * 1024 * 1024);
   let json = null;
   let parseError = null;
   try { json = JSON.parse(rawBody); } catch (error) { parseError = String(error); }
@@ -535,8 +533,8 @@ async function callResponses(arm, sequence) {
     ? `${CANDIDATE_NAME}-${arm.fixture}`
     : `${String(sequence).padStart(2, '0')}-${arm.fixture}-${arm.profile}`;
   await mkdir(RAW_DIR, { recursive: true });
-  await writeFile(join(RAW_DIR, `${stem}.response.json`), rawBody);
-  await writeJsonAtomic(join(RAW_DIR, `${stem}.receipt.json`), {
+  atomicWritePrivate(safeChild(RAW_DIR, `${stem}.response.json`), rawBody);
+  await writeJsonAtomic(safeChild(RAW_DIR, `${stem}.receipt.json`), {
     sequence,
     fixture: arm.fixture,
     profile: arm.profile,

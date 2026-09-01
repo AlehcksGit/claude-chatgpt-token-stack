@@ -1,4 +1,4 @@
-# Native Context Compiler 0.6.3
+# Native Context Compiler 0.6.4
 
 Native Context Compiler reduces supported local ChatGPT Work/Codex tool output
 while keeping normal turns on OpenAI's native path. It adds no API key or

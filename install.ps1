@@ -65,6 +65,10 @@ $PathChangedThisRun = $false
 $PathBeforeRun = $null
 $PathBeforeWasNull = $false
 $Controller = Join-Path $Repo 'stack\bin\lib\pxpipe-ctl.ps1'
+$PxpipePatchSource = Join-Path $Repo 'stack\bin\lib\pxpipe-runtime-patch.js'
+$PxpipePatchSha256 = 'f5f0b732dcc99b4c0b8aea64c31bddeac47fe32ee54a81215636e4c0966c9e46'
+$PxpipePackageIntegrity = 'sha512-utMkpkWAjgQyldB62ebWrTFKhTmMKTiwXIktqbHxLixrtgw/g+r9/0nzG2Vz1prKSvH2Q7x9JNrG4LwEmlHQ+g=='
+$PxpipePatchId = 'cts-pxpipe-0.13.2-security-1'
 
 function Step([string]$Message) { Write-Host ''; Write-Host "== $Message" -ForegroundColor Cyan }
 function Have([string]$Name) { return [bool](Get-Command $Name -ErrorAction SilentlyContinue) }
@@ -164,7 +168,7 @@ function Get-AllowlistedTarget([string]$Id) {
     'content-readme'{Join-Path $TokenDir 'README.md'} 'content-chat'{Join-Path $TokenDir 'chat-preferences.md'} 'content-src'{Join-Path $TokenDir 'src'}
     'launcher-pxpipe-cmd'{Join-Path $Bin 'pxpipe-ctl.cmd'} 'launcher-claude-cmd'{Join-Path $Bin 'claude-px.cmd'}
     'launcher-pxpipe-ps1'{Join-Path $Bin 'lib\pxpipe-ctl.ps1'} 'launcher-claude-ps1'{Join-Path $Bin 'lib\claude-px.ps1'}
-    'launcher-monitor'{Join-Path $Bin 'lib\monitor.js'} 'warpd-main'{Join-Path $Bin 'lib\warpd\warpd.ts'}
+    'launcher-monitor'{Join-Path $Bin 'lib\monitor.js'} 'launcher-pxpipe-patcher'{Join-Path $Bin 'lib\pxpipe-runtime-patch.js'} 'warpd-main'{Join-Path $Bin 'lib\warpd\warpd.ts'}
     'warpd-ca'{Join-Path $Bin 'lib\warpd\ca.ts'} 'warpd-connect'{Join-Path $Bin 'lib\warpd\connect.ts'}
     'warpd-der'{Join-Path $Bin 'lib\warpd\der.ts'} 'warpd-route'{Join-Path $Bin 'lib\warpd\route.ts'}
     'warpd-license'{Join-Path $Bin 'lib\warpd\LICENSE.pxpipe'} default{throw "Unknown artifact id: $Id"}
@@ -204,6 +208,7 @@ function Assert-Receipts($Baseline,$Receipt) {
       }else{
         $fingerprint=$dependency.fingerprint
         if([string]$fingerprint.manager-cne'npm'-or[string]$fingerprint.packageId-cne'pxpipe-proxy'-or[string]$fingerprint.name-cne'pxpipe-proxy'-or[string]$fingerprint.version-cne'0.13.2'-or[string]$fingerprint.managerPath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.prefix-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.path-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.packagePath-cnotmatch'^[A-Za-z]:\\'-or[string]$fingerprint.hash-cnotmatch'^file:[0-9a-f]{64}$'-or[string]$fingerprint.packageHash-cnotmatch'^file:[0-9a-f]{64}$'-or@($fingerprint.shims).Count-ne3){throw 'Installer-owned pxpipe provenance is invalid.'}
+        if($fingerprint.PSObject.Properties['runtimePatch']){$patch=$fingerprint.runtimePatch;if([int]$patch.schemaVersion-ne1-or[string]$patch.patchId-cne$PxpipePatchId-or[string]$patch.state-cne'patched'-or$patch.dependencyVerified-isnot[bool]-or-not[bool]$patch.dependencyVerified-or@($patch.files).Count-ne10-or@($patch.files|Where-Object{[string]$_.path-cnotmatch'^(?:dist/(?:core/(?:safe-text|applicability|gpt-model-profiles|messages-chat-bridge|proxy|transform)|warp/connect|safe-fs|export-collect|node)\.js)$'-or[string]$_.sha256-cnotmatch'^[0-9a-f]{64}$'}).Count){throw 'Installer-owned pxpipe runtime patch provenance is invalid.'}}
         foreach($shimName in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){$shim=@($fingerprint.shims|Where-Object{[IO.Path]::GetFileName([string]$_.path)-ceq$shimName});if($shim.Count-ne1-or-not([IO.Path]::GetFullPath([string]$shim[0].path)).Equals([IO.Path]::GetFullPath((Join-Path ([string]$fingerprint.prefix) $shimName)),[StringComparison]::OrdinalIgnoreCase)-or[string]$shim[0].state.kind-cne'file'-or[string]$shim[0].state.hash-cnotmatch'^file:[0-9a-f]{64}$'){throw 'Installer-owned pxpipe shim provenance is invalid.'}}
       }
     }
@@ -268,6 +273,14 @@ function Get-PxpipeShimStates([string]$Prefix) {
   $result=@();foreach($name in @('pxpipe','pxpipe.cmd','pxpipe.ps1')){$path=Join-Path ([IO.Path]::GetFullPath($Prefix)) $name;$state=Get-PathState $path;if([string]$state.kind-eq'directory'){throw "Unexpected npm shim directory: $path"};$result+=[pscustomobject][ordered]@{path=[IO.Path]::GetFullPath($path);state=$state}}
   return @($result)
 }
+function Invoke-PxpipeRuntimePatch([ValidateSet('inspect','apply','verify')][string]$Mode,[string]$PackageRoot) {
+  if(-not(Test-Path -LiteralPath $PxpipePatchSource -PathType Leaf)){throw 'The reviewed pxpipe runtime patcher is missing.'}
+  if((Get-FileHash -LiteralPath $PxpipePatchSource -Algorithm SHA256).Hash.ToLowerInvariant()-cne$PxpipePatchSha256){throw 'The pxpipe runtime patcher does not match the reviewed release.'}
+  $node=Get-PackageManagerPath 'node';if(-not$node){throw 'Node.js is required to verify the pxpipe runtime.'}
+  $LASTEXITCODE=0;$raw=(& $node $PxpipePatchSource $Mode ([IO.Path]::GetFullPath($PackageRoot)) 2>$null|Out-String);$code=$LASTEXITCODE
+  if($code-ne0-or[string]::IsNullOrWhiteSpace($raw)){throw "pxpipe runtime $Mode failed; the installed files are not the reviewed build."}
+  try{return $raw|ConvertFrom-Json}catch{throw 'pxpipe runtime verification returned invalid data.'}
+}
 function Get-PxpipePackageState {
   $manager=Get-PackageManagerPath 'npm'
   if(-not$manager){return [pscustomobject]@{known=$false;installed=$false;managerPath=$null;fingerprint=$null}}
@@ -278,15 +291,16 @@ function Get-PxpipePackageState {
     $LASTEXITCODE=0;$npmPrefix=([string](& $manager prefix -g 2>$null|Select-Object -First 1)).Trim()
     if($LASTEXITCODE-ne0-or[string]::IsNullOrWhiteSpace($npmPrefix)){throw 'npm prefix failed'}
     $npmPrefix=[IO.Path]::GetFullPath($npmPrefix);$shims=Get-PxpipeShimStates $npmPrefix
-    $package=Join-Path ([IO.Path]::GetFullPath($npmRoot)) 'pxpipe-proxy\package.json'
+    $packageRoot=Join-Path ([IO.Path]::GetFullPath($npmRoot)) 'pxpipe-proxy';$package=Join-Path $packageRoot 'package.json'
     if(-not(Test-Path -LiteralPath $package -PathType Leaf)){return [pscustomobject]@{known=$true;installed=$false;managerPath=$manager;prefix=$npmPrefix;shimStates=$shims;fingerprint=$null}}
     $json=[IO.File]::ReadAllText($package,$Utf8Strict)|ConvertFrom-Json
     if([string]$json.name-cne'pxpipe-proxy'-or[string]$json.version-cnotmatch'^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$'){throw 'npm package identity is invalid'}
-    $cli=Join-Path (Split-Path -Parent $package) 'bin\cli.js'
+    $cli=Join-Path $packageRoot 'bin\cli.js'
     if(-not(Test-Path -LiteralPath $cli -PathType Leaf)){throw 'pxpipe package is incomplete'}
     if(@($shims|Where-Object{[string]$_.state.kind-cne'file'}).Count){throw 'pxpipe npm shims are incomplete'}
-    $fingerprint=[pscustomobject][ordered]@{manager='npm';managerPath=$manager;packageId='pxpipe-proxy';prefix=$npmPrefix;shims=$shims;path=[IO.Path]::GetFullPath($cli);hash=(Get-PathState $cli).hash;packagePath=[IO.Path]::GetFullPath($package);packageHash=(Get-PathState $package).hash;version=[string]$json.version;name=[string]$json.name}
-    return [pscustomobject]@{known=$true;installed=$true;managerPath=$manager;prefix=$npmPrefix;shimStates=$shims;fingerprint=$fingerprint}
+    $runtimePatch=$null;if([string]$json.version-ceq$PxpipeVersion){$runtimePatch=Invoke-PxpipeRuntimePatch inspect $packageRoot}
+    $fingerprint=[pscustomobject][ordered]@{manager='npm';managerPath=$manager;packageId='pxpipe-proxy';prefix=$npmPrefix;shims=$shims;path=[IO.Path]::GetFullPath($cli);hash=(Get-PathState $cli).hash;packagePath=[IO.Path]::GetFullPath($package);packageHash=(Get-PathState $package).hash;version=[string]$json.version;name=[string]$json.name;runtimePatch=$runtimePatch}
+    return [pscustomobject]@{known=$true;installed=$true;managerPath=$manager;prefix=$npmPrefix;packageRoot=[IO.Path]::GetFullPath($packageRoot);shimStates=$shims;fingerprint=$fingerprint}
   }catch{return [pscustomobject]@{known=$false;installed=$false;managerPath=$manager;fingerprint=$null;error=$_.Exception.Message}}
 }
 function Get-PxpipeFingerprint {
@@ -299,6 +313,34 @@ function New-RtkManagedFingerprint($CommandFingerprint,$PackageFingerprint,[stri
   return [pscustomobject][ordered]@{managerPath=[IO.Path]::GetFullPath($ManagerPath);command=$CommandFingerprint;package=$PackageFingerprint}
 }
 function Test-FingerprintEqual($A,$B) { if($null-eq$A-or$null-eq$B){return $false};return (ConvertTo-StableValue $A)-ceq(ConvertTo-StableValue $B) }
+function Test-PxpipeOwnedFingerprint($Current,$Recorded) {
+  if(Test-FingerprintEqual $Current $Recorded){return $true}
+  if($null-eq$Current-or$null-eq$Recorded-or$Recorded.PSObject.Properties['runtimePatch']){return $false}
+  $legacy=[pscustomobject][ordered]@{manager=$Current.manager;managerPath=$Current.managerPath;packageId=$Current.packageId;prefix=$Current.prefix;shims=$Current.shims;path=$Current.path;hash=$Current.hash;packagePath=$Current.packagePath;packageHash=$Current.packageHash;version=$Current.version;name=$Current.name}
+  return Test-FingerprintEqual $legacy $Recorded
+}
+function Install-ReviewedPxpipe([string]$ManagerPath) {
+  $tempBase=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\');$temp=Join-Path $tempBase ('claude-token-stack-pxpipe-'+[Guid]::NewGuid().ToString('N'))
+  [void](New-Item -ItemType Directory -Path $temp)
+  try{
+    $LASTEXITCODE=0;$packRaw=(& $ManagerPath pack "pxpipe-proxy@$PxpipeVersion" --ignore-scripts --json --pack-destination $temp --registry=https://registry.npmjs.org/ 2>$null|Out-String);$packCode=$LASTEXITCODE
+    if($packCode-ne0-or[string]::IsNullOrWhiteSpace($packRaw)){throw "npm pack failed (exit $packCode)."}
+    try{$packItems=@($packRaw|ConvertFrom-Json)}catch{throw 'npm pack returned invalid package metadata.'}
+    if($packItems.Count-ne1){throw 'npm pack returned an unexpected package set.'};$pack=$packItems[0]
+    if([string]$pack.name-cne'pxpipe-proxy'-or[string]$pack.version-cne$PxpipeVersion-or[string]$pack.integrity-cne$PxpipePackageIntegrity){throw 'npm returned a pxpipe package that does not match the reviewed registry integrity.'}
+    $filename=[string]$pack.filename;if([string]::IsNullOrWhiteSpace($filename)-or[IO.Path]::GetFileName($filename)-cne$filename){throw 'npm pack returned an unsafe archive name.'}
+    $archive=[IO.Path]::GetFullPath((Join-Path $temp $filename));if(-not(Split-Path -Parent $archive).Equals($temp,[StringComparison]::OrdinalIgnoreCase)-or-not(Test-Path -LiteralPath $archive -PathType Leaf)){throw 'The reviewed pxpipe archive is missing.'}
+    $sha=[Security.Cryptography.SHA512]::Create();try{$actual='sha512-'+[Convert]::ToBase64String($sha.ComputeHash([IO.File]::ReadAllBytes($archive)))}finally{$sha.Dispose()};if($actual-cne$PxpipePackageIntegrity){throw 'The downloaded pxpipe archive failed its SHA-512 integrity check.'}
+    $tar=Join-Path $env:SystemRoot 'System32\tar.exe';if(-not(Test-Path -LiteralPath $tar -PathType Leaf)){throw 'Windows tar is required to validate the pxpipe archive.'}
+    $LASTEXITCODE=0;$entries=@(& $tar -tzf $archive);if($LASTEXITCODE-ne0-or$entries.Count-eq0){throw 'The pxpipe archive could not be inspected.'}
+    foreach($entry in $entries){$name=[string]$entry;if($name.StartsWith('/')-or$name.StartsWith('\')-or$name.Contains('\')-or$name.Contains(':')-or$name-notmatch'^package(?:/|$)'-or$name-match'(^|/)\.\.(/|$)'){throw "Unsafe pxpipe archive entry: $name"}}
+    if(-not@($entries|Where-Object{[string]$_-ceq'package/package.json'})){throw 'The pxpipe archive has no package manifest.'}
+    & $ManagerPath install --global $archive --ignore-scripts --no-audit --no-fund --install-strategy=nested|Out-Host;$installCode=$LASTEXITCODE
+    if($installCode-ne0){throw "npm pxpipe install failed (exit $installCode)."}
+  }finally{
+    $resolved=[IO.Path]::GetFullPath($temp);if((Split-Path -Parent $resolved).Equals($tempBase,[StringComparison]::OrdinalIgnoreCase)-and(Split-Path -Leaf $resolved)-cmatch'^claude-token-stack-pxpipe-[0-9a-f]{32}$'-and(Test-Path -LiteralPath $resolved)){Remove-Item -LiteralPath $resolved -Recurse -Force}
+  }
+}
 function Refresh-ProcessPath { $u=[Environment]::GetEnvironmentVariable('Path','User');$m=[Environment]::GetEnvironmentVariable('Path','Machine');$current=$env:Path;$env:Path=(@($current,$u,$m)|Where-Object{$null-ne$_-and$_-ne''})-join';' }
 function Same-PathSegment([string]$A,[string]$B) { try{return [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($A.Trim().Trim('"'))).TrimEnd('\').Equals([IO.Path]::GetFullPath($B).TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase)}catch{return $false} }
 function Add-PathSegment([AllowNull()]$Raw,[string]$Segment) { $wasNull=$null-eq$Raw;$text=if($wasNull){''}else{[string]$Raw};foreach($x in $text.Split(@(';'),[StringSplitOptions]::None)){if(Same-PathSegment $x $Segment){return [pscustomobject]@{original=$Raw;originalWasNull=$wasNull;result=$Raw;added=$false}}};$result=if($text-eq''){$Segment}elseif($text.EndsWith(';')){$text+$Segment}else{$text+';'+$Segment};return [pscustomobject]@{original=$Raw;originalWasNull=$wasNull;result=$result;added=$true} }
@@ -361,7 +403,7 @@ function Rollback-Operations($Journal) {
   }
 }
 
-foreach($required in @('stack\CLAUDE.md','stack\RTK.md','stack\bin\lib\pxpipe-ctl.ps1','stack\bin\lib\warpd\warpd.ts','stack\bin\lib\monitor.js','docs\HOW-IT-WORKS.md')){if(-not(Test-Path -LiteralPath (Join-Path $Repo $required))){throw "Missing $required; run from the extracted repository."}}
+foreach($required in @('stack\CLAUDE.md','stack\RTK.md','stack\bin\lib\pxpipe-ctl.ps1','stack\bin\lib\pxpipe-runtime-patch.js','stack\bin\lib\warpd\warpd.ts','stack\bin\lib\monitor.js','docs\HOW-IT-WORKS.md')){if(-not(Test-Path -LiteralPath (Join-Path $Repo $required))){throw "Missing $required; run from the extracted repository."}}
 if(-not$TargetHome.Equals($CurrentHome,[StringComparison]::OrdinalIgnoreCase)-and-not$NoPath-and-not$SkipPxpipe){throw 'Alternate TargetHome installs require -NoPath so the real user PATH is never changed.'}
 # Resolve shared prerequisites before creating receipts, journals, or configuration.
 if(-not$SkipPxpipe){
@@ -399,7 +441,7 @@ try{
     $plans+=Prepare-Artifact $baseline $receipt 'launcher-monitor' 'pxpipe' $monitorDesired $false $false
   }
   if(-not$SkipPxpipe){
-    $launcherSources=[ordered]@{'launcher-pxpipe-cmd'='stack\bin\pxpipe-ctl.cmd';'launcher-claude-cmd'='stack\bin\claude-px.cmd';'launcher-pxpipe-ps1'='stack\bin\lib\pxpipe-ctl.ps1';'launcher-claude-ps1'='stack\bin\lib\claude-px.ps1';'launcher-monitor'='stack\bin\lib\monitor.js';'warpd-main'='stack\bin\lib\warpd\warpd.ts';'warpd-ca'='stack\bin\lib\warpd\ca.ts';'warpd-connect'='stack\bin\lib\warpd\connect.ts';'warpd-der'='stack\bin\lib\warpd\der.ts';'warpd-route'='stack\bin\lib\warpd\route.ts';'warpd-license'='stack\bin\lib\warpd\LICENSE.pxpipe'}
+    $launcherSources=[ordered]@{'launcher-pxpipe-cmd'='stack\bin\pxpipe-ctl.cmd';'launcher-claude-cmd'='stack\bin\claude-px.cmd';'launcher-pxpipe-ps1'='stack\bin\lib\pxpipe-ctl.ps1';'launcher-claude-ps1'='stack\bin\lib\claude-px.ps1';'launcher-monitor'='stack\bin\lib\monitor.js';'launcher-pxpipe-patcher'='stack\bin\lib\pxpipe-runtime-patch.js';'warpd-main'='stack\bin\lib\warpd\warpd.ts';'warpd-ca'='stack\bin\lib\warpd\ca.ts';'warpd-connect'='stack\bin\lib\warpd\connect.ts';'warpd-der'='stack\bin\lib\warpd\der.ts';'warpd-route'='stack\bin\lib\warpd\route.ts';'warpd-license'='stack\bin\lib\warpd\LICENSE.pxpipe'}
     foreach($id in $launcherSources.Keys){$desired=Join-Path $desiredRoot $id;Copy-State (Join-Path $Repo $launcherSources[$id]) $desired;$plans+=Prepare-Artifact $baseline $receipt $id 'pxpipe' $desired $false $ForceLauncherOverwrite}
   }
 
@@ -439,16 +481,23 @@ try{
     if($null-eq$baseline.dependencies.pxpipe){$baseline.dependencies.pxpipe=[pscustomobject][ordered]@{existedBefore=([bool]$beforePxState.installed-or@($beforePxState.shimStates|Where-Object{[string]$_.state.kind-cne'absent'}).Count-gt0);fingerprint=$beforePx;shimStates=@($beforePxState.shimStates)};Write-JsonAtomic $BaselineReceiptPath $baseline -Seal}
     if(-not[bool]$beforePxState.installed-and@($beforePxState.shimStates|Where-Object{[string]$_.state.kind-cne'absent'}).Count){throw 'A pxpipe npm shim already exists without the package; it was preserved as a collision.'}
     $ownedBefore=$null-ne$receipt.dependencies.pxpipe-and[bool]$receipt.dependencies.pxpipe.installedByThisInstaller
-    if($ownedBefore-and(-not[bool]$beforePxState.installed-or-not(Test-FingerprintEqual $beforePx $receipt.dependencies.pxpipe.fingerprint))){throw 'Installer-owned pxpipe provenance changed; reinstall preserved it for review.'}
-    $installed=$false;$pxExternal=$null
-    if(-not[bool]$beforePxState.installed){
+    if($ownedBefore-and(-not[bool]$beforePxState.installed-or-not(Test-PxpipeOwnedFingerprint $beforePx $receipt.dependencies.pxpipe.fingerprint))){throw 'Installer-owned pxpipe provenance changed; reinstall preserved it for review.'}
+    $installed=$false;$pxExternal=$null;$needsInstall=-not[bool]$beforePxState.installed
+    if([bool]$beforePxState.installed){
+      if([string]$beforePx.name-cne'pxpipe-proxy'-or[string]$beforePx.version-cne$PxpipeVersion){throw "Pre-existing pxpipe must be exactly the reviewed $PxpipeVersion package; version $($beforePx.version) was preserved. Re-run with -SkipPxpipe to leave it unmanaged."}
+      $runtimeOk=$null-ne$beforePx.runtimePatch-and[string]$beforePx.runtimePatch.patchId-ceq$PxpipePatchId-and[string]$beforePx.runtimePatch.state-ceq'patched'-and[bool]$beforePx.runtimePatch.dependencyVerified
+      if(-not$runtimeOk){if($ownedBefore){$needsInstall=$true}else{throw 'Pre-existing pxpipe is the upstream package without the reviewed runtime hardening; it was preserved. Re-run with -SkipPxpipe or uninstall it before installing Token Stack.'}}
+    }
+    if($needsInstall){
       $managerIdentity=Get-ManagerIdentity 'npm';if($null-eq$managerIdentity-or-not([IO.Path]::GetFullPath([string]$managerIdentity.path)).Equals([IO.Path]::GetFullPath([string]$beforePxState.managerPath),[StringComparison]::OrdinalIgnoreCase)){throw 'The npm executable changed during pxpipe preflight; no install was started.'}
       $pxExternal=[pscustomobject][ordered]@{name='pxpipe';status='intent';version=$PxpipeVersion;managerIdentity=$managerIdentity;fingerprint=$null};$journal.externalOperations+= $pxExternal;Write-JsonAtomic $JournalPath $journal -Seal
-      & ([string]$managerIdentity.path) install -g "pxpipe-proxy@$PxpipeVersion" --no-fund --no-audit|Out-Host;$installCode=$LASTEXITCODE;Refresh-ProcessPath;if($installCode-ne0){throw "npm pxpipe install failed (exit $installCode); the journal was retained for exact inventory recovery."};$installed=$true
-    }else{if([string]$beforePx.name-cne'pxpipe-proxy'-or[string]$beforePx.version-cne$PxpipeVersion){throw "Pre-existing pxpipe must be exactly the reviewed $PxpipeVersion package; version $($beforePx.version) was preserved. Re-run with -SkipPxpipe to leave it unmanaged."}}
+      Install-ReviewedPxpipe ([string]$managerIdentity.path);Refresh-ProcessPath;$installed=$true
+      $installedState=Get-PxpipePackageState;if(-not[bool]$installedState.known-or-not[bool]$installedState.installed){throw 'pxpipe-proxy was not found after the verified archive installation.'}
+      $patched=Invoke-PxpipeRuntimePatch apply ([string]$installedState.packageRoot);if([string]$patched.patchId-cne$PxpipePatchId-or[string]$patched.state-cne'patched'-or-not[bool]$patched.dependencyVerified){throw 'pxpipe runtime hardening did not verify after installation.'}
+    }
     $afterPxState=Get-PxpipePackageState;$afterPx=$afterPxState.fingerprint;if(-not[bool]$afterPxState.known-or-not[bool]$afterPxState.installed-or$null-eq$afterPx-or[string]$afterPx.name-cne'pxpipe-proxy'){throw 'pxpipe-proxy was not verified by npm inventory after installation.'}
     if($installed){$afterManagerIdentity=Get-ManagerIdentity 'npm';if($null-eq$afterManagerIdentity-or-not(Test-FingerprintEqual $afterManagerIdentity $pxExternal.managerIdentity)-or-not([IO.Path]::GetFullPath([string]$afterPxState.managerPath)).Equals([IO.Path]::GetFullPath([string]$pxExternal.managerIdentity.path),[StringComparison]::OrdinalIgnoreCase)){throw 'The npm executable changed during pxpipe installation; ownership intent was retained for review.'}}
-    if($installed-and[string]$afterPx.version-cne$PxpipeVersion){throw "npm inventory did not verify pinned pxpipe-proxy $PxpipeVersion."}
+    if([string]$afterPx.version-cne$PxpipeVersion-or$null-eq$afterPx.runtimePatch-or[string]$afterPx.runtimePatch.patchId-cne$PxpipePatchId-or[string]$afterPx.runtimePatch.state-cne'patched'-or-not[bool]$afterPx.runtimePatch.dependencyVerified){throw "npm inventory did not verify the pinned and hardened pxpipe-proxy $PxpipeVersion runtime."}
     if($null-ne$pxExternal){$pxExternal.status='complete';$pxExternal.fingerprint=$afterPx;Write-JsonAtomic $JournalPath $journal -Seal}
     $receipt.dependencies.pxpipe=[pscustomobject][ordered]@{installedByThisInstaller=($ownedBefore-or$installed);fingerprint=$afterPx};$receipt.components.pxpipe=$true;Write-JsonAtomic $ReceiptPath $receipt -Seal
   }

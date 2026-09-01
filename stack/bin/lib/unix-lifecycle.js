@@ -22,6 +22,33 @@ const STATE_NAME = '.claude-token-stack';
 const ID_RE = /^[a-z][a-z0-9-]{0,63}$/;
 const SETTINGS_ENV_KEYS = ['HTTPS_PROXY', 'NO_PROXY', 'NODE_EXTRA_CA_CERTS'];
 
+const sameFile = (a, b) => a.dev === b.dev && a.ino === b.ino;
+const sameOpenPath = (opened, named) => process.platform === 'win32' || sameFile(opened, named);
+const unchangedOpenPath = (opened, named, finished, renamed) => sameFile(opened, finished) && sameFile(named, renamed) && (process.platform === 'win32' || sameFile(opened, renamed));
+function readStableFile(file, maxBytes = 64 * 1024 * 1024) {
+  let fd;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const opened = fs.fstatSync(fd); const named = fs.lstatSync(file);
+    if (!opened.isFile() || !named.isFile() || named.isSymbolicLink() || opened.nlink !== 1 || named.nlink !== 1 || !sameOpenPath(opened, named)) fail(`File changed or is unsafe: ${file}`, 2);
+    if (typeof process.getuid === 'function' && (opened.uid !== process.getuid() || named.uid !== process.getuid())) fail(`File is not owned by the current user: ${file}`, 2);
+    if (!Number.isSafeInteger(opened.size) || opened.size < 0 || opened.size > maxBytes) fail(`File is too large: ${file}`, 2);
+    const data = Buffer.alloc(opened.size); let offset = 0;
+    while (offset < data.length) { const count = fs.readSync(fd, data, offset, data.length - offset, offset); if (!count) break; offset += count; }
+    const finished = fs.fstatSync(fd); const renamed = fs.lstatSync(file);
+    if (offset !== data.length || !unchangedOpenPath(opened, named, finished, renamed) || finished.size !== opened.size || renamed.size !== opened.size || renamed.isSymbolicLink()) fail(`File changed while being read: ${file}`, 2);
+    return data;
+  } finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
+}
+function readStableLink(file) {
+  const before = fs.lstatSync(file);
+  if (!before.isSymbolicLink() || (typeof process.getuid === 'function' && before.uid !== process.getuid())) fail(`Link is unsafe: ${file}`, 2);
+  const value = fs.readlinkSync(file);
+  const after = fs.lstatSync(file);
+  if (!after.isSymbolicLink() || !sameFile(before, after)) fail(`Link changed while being read: ${file}`, 2);
+  return value;
+}
+
 function fail(message, code = 1) {
   const error = new Error(message);
   error.exitCode = code;
@@ -108,6 +135,7 @@ function layout(targetHome) {
       'unix-process': path.join(bin, 'lib', 'unix-process.js'),
       supervisor: path.join(bin, 'lib', 'token-stack-supervisor.sh'),
       monitor: path.join(bin, 'lib', 'monitor.js'),
+      'pxpipe-patcher': path.join(bin, 'lib', 'pxpipe-runtime-patch.js'),
       'warpd-ca': path.join(bin, 'lib', 'warpd', 'ca.ts'),
       'warpd-connect': path.join(bin, 'lib', 'warpd', 'connect.ts'),
       'warpd-der': path.join(bin, 'lib', 'warpd', 'der.ts'),
@@ -251,7 +279,7 @@ function acquireLock(paths) {
       const ownerStat = fs.lstatSync(ownerPath);
       if (ownerStat.isSymbolicLink() || !ownerStat.isFile() || ownerStat.nlink > 1) fail(`Lifecycle lock owner is unsafe: ${ownerPath}`);
       if (typeof process.getuid === 'function' && ownerStat.uid !== process.getuid()) fail(`Lifecycle lock owner is not owned by the current user: ${ownerPath}`, 2);
-      owner = JSON.parse(fs.readFileSync(ownerPath, 'utf8'));
+      owner = JSON.parse(readStableFile(ownerPath, 64 * 1024).toString('utf8'));
     } catch (ownerError) {
       if (ownerError.exitCode) throw ownerError;
       if (ownerError instanceof SyntaxError) fail(`Lifecycle lock owner is invalid: ${ownerPath}`);
@@ -272,7 +300,7 @@ function acquireLock(paths) {
 function releaseLock(paths, owner) {
   const ownerPath = path.join(paths.lock, 'owner.json');
   try {
-    const current = JSON.parse(fs.readFileSync(ownerPath, 'utf8'));
+    const current = JSON.parse(readStableFile(ownerPath, 64 * 1024).toString('utf8'));
     if (current.pid !== owner.pid || current.nonce !== owner.nonce) return;
     fs.unlinkSync(ownerPath);
     fs.rmdirSync(paths.lock);
@@ -323,7 +351,7 @@ function validateReceipt(paths, receipt) {
       if (!state || state.kind === 'missing') continue;
       const snapshot = path.join(paths.state, state.snapshot);
       assertSafePath(paths, snapshot);
-      const bytes = fs.readFileSync(snapshot);
+      const bytes = readStableFile(snapshot);
       if (hashBuffer(bytes) !== state.hash) fail(`Receipt snapshot hash mismatch for ${id}.`);
     }
   }
@@ -346,9 +374,20 @@ function validateReceipt(paths, receipt) {
   exactKeys(receipt.dependencies, ['rtk', 'pxpipe'], 'Receipt dependencies');
   for (const [name, dependency] of Object.entries(receipt.dependencies)) {
     if (dependency === null) continue;
-    exactKeys(dependency, ['version', 'installedByThisInstaller'], `Receipt dependency ${name}`);
+    const keys = Object.keys(dependency).sort();
+    const allowed = name === 'pxpipe' ? new Set(['version', 'installedByThisInstaller', 'runtimePatch']) : new Set(['version', 'installedByThisInstaller']);
+    if (keys.some((key) => !allowed.has(key)) || !keys.includes('version') || !keys.includes('installedByThisInstaller')) fail(`Receipt dependency ${name} has unexpected fields.`);
     if (typeof dependency.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(dependency.version) || typeof dependency.installedByThisInstaller !== 'boolean') {
       fail(`Receipt dependency ${name} is invalid.`);
+    }
+    if (name === 'pxpipe' && dependency.runtimePatch !== undefined) {
+      const runtime = dependency.runtimePatch;
+      exactKeys(runtime, ['schemaVersion', 'patchId', 'state', 'dependencyVerified', 'files'], 'pxpipe runtime patch');
+      if (runtime.schemaVersion !== 1 || runtime.patchId !== 'cts-pxpipe-0.13.2-security-1' || runtime.state !== 'patched' || runtime.dependencyVerified !== true || !Array.isArray(runtime.files) || runtime.files.length !== 10) fail('pxpipe runtime patch receipt is invalid.');
+      for (const file of runtime.files) {
+        exactKeys(file, ['path', 'sha256'], 'pxpipe runtime patch file');
+        if (typeof file.path !== 'string' || !/^dist\/(?:core\/(?:safe-text|applicability|gpt-model-profiles|messages-chat-bridge|proxy|transform)|warp\/connect|safe-fs|export-collect|node)\.js$/.test(file.path) || typeof file.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(file.sha256)) fail('pxpipe runtime patch file receipt is invalid.');
+      }
     }
   }
   return receipt;
@@ -372,7 +411,7 @@ function loadReceipt(paths, create = false) {
   }
   const stat = fs.lstatSync(paths.receipt);
   if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink > 1) fail(`Receipt path is unsafe: ${paths.receipt}`);
-  const receipt = JSON.parse(fs.readFileSync(paths.receipt, 'utf8'));
+  const receipt = JSON.parse(readStableFile(paths.receipt, 4 * 1024 * 1024).toString('utf8'));
   return validateReceipt(paths, receipt);
 }
 
@@ -396,7 +435,7 @@ function currentState(paths, target, namespace, id) {
     return { kind: 'symlink', hash: hashBuffer(value), mode: stat.mode & 0o7777, snapshot };
   }
   if (!stat.isFile() || stat.nlink > 1) fail(`Managed target is not a safe regular file: ${target}`);
-  const value = fs.readFileSync(target);
+  const value = readStableFile(target);
   const snapshot = `${namespace}/${id}.bin`;
   ensureDirectory(paths, path.join(paths.state, namespace), { directories: [] });
   atomicWrite(path.join(paths.state, snapshot), value, 0o600);
@@ -415,7 +454,7 @@ function inspectState(paths, target) {
     return { kind: 'symlink', hash: hashBuffer(value), mode: stat.mode & 0o7777 };
   }
   if (!stat.isFile() || stat.nlink > 1) fail(`Managed target is not a safe regular file: ${target}`);
-  return { kind: 'file', hash: hashBuffer(fs.readFileSync(target)), mode: stat.mode & 0o7777 };
+  return { kind: 'file', hash: hashBuffer(readStableFile(target)), mode: stat.mode & 0o7777 };
 }
 
 function sameState(actual, recorded) {
@@ -426,7 +465,7 @@ function sameState(actual, recorded) {
 
 function snapshotBytes(paths, state) {
   if (!state || state.kind === 'missing') return null;
-  const value = fs.readFileSync(path.join(paths.state, state.snapshot));
+  const value = readStableFile(path.join(paths.state, state.snapshot));
   if (hashBuffer(value) !== state.hash) fail('Snapshot integrity check failed.');
   return value;
 }
@@ -539,7 +578,7 @@ function readCurrentJson(file) {
   if (!fs.existsSync(file)) return {};
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink > 1) fail(`Settings path is unsafe: ${file}`);
-  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); }
+  try { return JSON.parse(readStableFile(file, 4 * 1024 * 1024).toString('utf8').replace(/^\uFEFF/, '')); }
   catch (error) { fail(`settings.json is not valid JSON: ${error.message}`, 2); }
 }
 
@@ -741,7 +780,7 @@ function snapshotConflict(paths, receipt, id, target) {
   if (current.kind === 'missing') {
     atomicWrite(path.join(paths.conflicts, `${stamp}-${id}.missing`), Buffer.from('missing\n'), 0o600);
   } else {
-    const data = current.kind === 'file' ? fs.readFileSync(target) : Buffer.from(fs.readlinkSync(target), 'utf8');
+    const data = current.kind === 'file' ? readStableFile(target) : Buffer.from(readStableLink(target), 'utf8');
     atomicWrite(path.join(paths.conflicts, `${stamp}-${id}.current`), data, 0o600);
   }
 }
@@ -848,7 +887,7 @@ function cleanStateIfComplete(paths, receipt) {
 function fileDesired(file, mode) {
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || !stat.isFile()) fail(`Source is not a regular file: ${file}`);
-  return { kind: 'file', data: fs.readFileSync(file), mode };
+  return { kind: 'file', data: readStableFile(file), mode };
 }
 
 function rulesBytes(repo, profile, withRtk) {
@@ -856,7 +895,7 @@ function rulesBytes(repo, profile, withRtk) {
     ? path.join(repo, 'stack', 'CLAUDE.md')
     : path.join(repo, 'upstream', 'claude-token-efficient', 'profiles', `CLAUDE.${profile}.md`);
   if (!fs.existsSync(source)) fail(`Rules profile is missing: ${source}`);
-  let text = fs.readFileSync(source, 'utf8').replace(/\r\n/g, '\n');
+  let text = readStableFile(source).toString('utf8').replace(/\r\n/g, '\n');
   text = text.split('\n').filter((line) => line.trim() !== '@RTK.md').join('\n').replace(/\s+$/, '');
   if (withRtk) text += '\n\n@RTK.md';
   return Buffer.from(`${text}\n`, 'utf8');
@@ -870,6 +909,7 @@ function runtimeFiles(repo) {
     'unix-process': [path.join(root, 'lib', 'unix-process.js'), 0o755],
     supervisor: [path.join(root, 'lib', 'token-stack-supervisor.sh'), 0o755],
     monitor: [path.join(root, 'lib', 'monitor.js'), 0o644],
+    'pxpipe-patcher': [path.join(root, 'lib', 'pxpipe-runtime-patch.js'), 0o644],
     'warpd-ca': [path.join(root, 'lib', 'warpd', 'ca.ts'), 0o644],
     'warpd-connect': [path.join(root, 'lib', 'warpd', 'connect.ts'), 0o644],
     'warpd-der': [path.join(root, 'lib', 'warpd', 'der.ts'), 0o644],
@@ -891,7 +931,8 @@ function commandInstall(paths, args) {
   try {
     const receipt = loadReceipt(paths, true);
     receipt.dependencies.rtk = args['rtk-version'] === 'skip' ? receipt.dependencies.rtk : { version: args['rtk-version'], installedByThisInstaller: false };
-    receipt.dependencies.pxpipe = args['pxpipe-version'] === 'skip' ? receipt.dependencies.pxpipe : { version: args['pxpipe-version'], installedByThisInstaller: args['pxpipe-installed'] === 'yes' };
+    receipt.dependencies.pxpipe = args['pxpipe-version'] === 'skip' ? receipt.dependencies.pxpipe : { version: args['pxpipe-version'], installedByThisInstaller: args['pxpipe-installed'] === 'yes', runtimePatch: JSON.parse(args['pxpipe-runtime']) };
+    validateReceipt(paths, receipt);
     saveReceipt(paths, receipt);
     // --skip-rtk means leave an already-managed RTK integration alone.  Keep
     // its existing rules import while updating the common profile; do not
@@ -982,6 +1023,13 @@ function commandReceipt(paths) {
   else process.stdout.write(`${receipt.installId}\n`);
 }
 
+function commandDependency(paths, args) {
+  if (!['rtk', 'pxpipe'].includes(args.name)) fail('Dependency name is invalid.', 2);
+  const receipt = loadReceipt(paths, false);
+  if (!receipt || receipt.dependencies[args.name] === null) process.exitCode = 3;
+  else process.stdout.write(`${JSON.stringify(receipt.dependencies[args.name])}\n`);
+}
+
 function commandUninstall(paths) {
   if (!fs.existsSync(paths.state)) {
     console.log('No Unix lifecycle receipt exists; nothing to restore.');
@@ -1031,7 +1079,7 @@ function main() {
   requireOptions(args, ['home']);
   const paths = layout(args.home);
   if (command === 'install') {
-    requireOptions(args, ['repo', 'profile', 'rtk-path', 'rtk-version', 'pxpipe-version', 'pxpipe-installed', 'desktop', 'warp-url', 'ca-path']);
+    requireOptions(args, ['repo', 'profile', 'rtk-path', 'rtk-version', 'pxpipe-version', 'pxpipe-installed', 'pxpipe-runtime', 'desktop', 'warp-url', 'ca-path']);
     commandInstall(paths, args);
   } else if (command === 'settings') {
     requireOptions(args, ['mode', 'warp-url', 'ca-path']);
@@ -1044,6 +1092,9 @@ function main() {
     commandMatches(paths, args);
   } else if (command === 'receipt') {
     commandReceipt(paths);
+  } else if (command === 'dependency') {
+    requireOptions(args, ['name']);
+    commandDependency(paths, args);
   } else if (command === 'uninstall') {
     commandUninstall(paths);
   } else {

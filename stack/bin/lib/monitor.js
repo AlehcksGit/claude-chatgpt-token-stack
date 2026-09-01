@@ -78,43 +78,52 @@ function run(cmd, args, ms = 6000) {
     execFile(cmd, args, { timeout: ms, windowsHide: true, maxBuffer: 4e6 }, (err, out) => resolve(err ? null : String(out)));
   });
 }
-function readJson(p) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } }
-function readManagedJson(p) {
+const sameFile = (a, b) => a.dev === b.dev && a.ino === b.ino;
+const sameOpenPath = (opened, named) => process.platform === "win32" || sameFile(opened, named);
+const unchangedOpenPath = (opened, named, finished, renamed) => sameFile(opened, finished) && sameFile(named, renamed) && (process.platform === "win32" || sameFile(opened, renamed));
+function readStableFile(p, max = 4 * 1024 * 1024) {
+  let fd;
   try {
-    const st = fs.lstatSync(p);
-    if (!st.isFile() || st.isSymbolicLink() || st.size > 4 * 1024 * 1024) return null;
-    return JSON.parse(fs.readFileSync(p, "utf8"));
+    fd = fs.openSync(p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const opened = fs.fstatSync(fd);
+    const named = fs.lstatSync(p);
+    if (!opened.isFile() || !named.isFile() || named.isSymbolicLink() || opened.nlink !== 1 || named.nlink !== 1 || !sameOpenPath(opened, named)) return null;
+    if (typeof process.getuid === "function" && (opened.uid !== process.getuid() || named.uid !== process.getuid())) return null;
+    if (!Number.isSafeInteger(opened.size) || opened.size < 0 || opened.size > max) return null;
+    const data = Buffer.alloc(opened.size); let offset = 0;
+    while (offset < data.length) { const count = fs.readSync(fd, data, offset, data.length - offset, offset); if (!count) break; offset += count; }
+    const finished = fs.fstatSync(fd); const renamed = fs.lstatSync(p);
+    if (offset !== data.length || !unchangedOpenPath(opened, named, finished, renamed) || finished.size !== opened.size || renamed.size !== opened.size || renamed.isSymbolicLink()) return null;
+    return data;
   } catch { return null; }
+  finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
 }
-function readManagedText(p, max = 2 * 1024 * 1024) {
-  try {
-    const st = fs.lstatSync(p);
-    if (!st.isFile() || st.isSymbolicLink() || st.size > max) return null;
-    return fs.readFileSync(p, "utf8");
-  } catch { return null; }
-}
+function readJson(p) { try { const data = readStableFile(p); return data === null ? null : JSON.parse(data.toString("utf8")); } catch { return null; } }
+function readManagedJson(p) { return readJson(p); }
+function readManagedText(p, max = 2 * 1024 * 1024) { const data = readStableFile(p, max); return data === null ? null : data.toString("utf8"); }
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 function fileFingerprint(p) {
-  try {
-    const st = fs.lstatSync(p);
-    if (!st.isFile() || st.isSymbolicLink()) return null;
-    return `file:${sha256(fs.readFileSync(p))}`;
-  } catch { return null; }
+  const data = readStableFile(p, 16 * 1024 * 1024);
+  return data === null ? null : `file:${sha256(data)}`;
 }
 function directoryFingerprint(root) {
   try {
     const top = fs.lstatSync(root);
-    if (!top.isDirectory() || top.isSymbolicLink()) return null;
+    if (!top.isDirectory() || top.isSymbolicLink() || top.nlink < 1 || !samePath(fs.realpathSync(root), root)) return null;
     const children = [];
     const visit = (dir) => {
+      const before = fs.lstatSync(dir);
+      if (!before.isDirectory() || before.isSymbolicLink() || !samePath(fs.realpathSync(dir), dir)) throw new Error("linked managed directory");
       for (const name of fs.readdirSync(dir)) {
         const full = path.join(dir, name); const st = fs.lstatSync(full);
         if (st.isSymbolicLink()) throw new Error("linked managed path");
         const rel = path.relative(root, full).split(path.sep).join("/");
         if (st.isDirectory()) { children.push({ rel, dir: true }); visit(full); }
-        else if (st.isFile()) children.push({ rel, dir: false, hash: sha256(fs.readFileSync(full)) });
+        else if (st.isFile()) { const data = readStableFile(full, 16 * 1024 * 1024); if (data === null) throw new Error("unstable managed file"); children.push({ rel, dir: false, hash: sha256(data) }); }
         else throw new Error("unsupported managed path");
       }
+      const after = fs.lstatSync(dir);
+      if (!sameFile(before, after) || !after.isDirectory() || after.isSymbolicLink()) throw new Error("managed directory changed");
     };
     visit(root);
     children.sort((a, b) => a.rel.localeCompare(b.rel, "en-US", { sensitivity: "base" }) || a.rel.localeCompare(b.rel, "en-US"));
@@ -207,14 +216,17 @@ function tailBytes(p, n) {
   let fd;
   try {
     fd = fs.openSync(p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
-    const st = fs.fstatSync(fd);
-    if (!st.isFile()) return { text: "", bytes: 0 };
+    const st = fs.fstatSync(fd); const named = fs.lstatSync(p);
+    if (!st.isFile() || !named.isFile() || named.isSymbolicLink() || st.nlink !== 1 || named.nlink !== 1 || !sameOpenPath(st, named)) return { text: "", bytes: 0 };
+    if (typeof process.getuid === "function" && (st.uid !== process.getuid() || named.uid !== process.getuid())) return { text: "", bytes: 0 };
     const len = Math.min(n, st.size); const buf = Buffer.alloc(len);
     const read = fs.readSync(fd, buf, 0, len, st.size - len);
+    const finished = fs.fstatSync(fd); const renamed = fs.lstatSync(p);
+    if (!unchangedOpenPath(st, named, finished, renamed) || finished.size !== st.size || renamed.size !== st.size || renamed.isSymbolicLink()) return { text: "", bytes: 0 };
     let s = buf.subarray(0, read).toString("utf8"); if (len < st.size) s = s.slice(s.indexOf("\n") + 1);
     return { text: s, bytes: st.size };
   } catch { return { text: "", bytes: 0 }; }
-  finally { if (fd !== undefined) fs.closeSync(fd); }
+  finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
 }
 
 // ---- pxpipe: per-request net savings from events.jsonl (used tokens already include the image cost) ----

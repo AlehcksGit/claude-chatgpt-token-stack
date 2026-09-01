@@ -3,8 +3,8 @@
 // Short lines so every cell size fits one <=1568px page. Same content across
 // sizes => only resolution changes. Reader accuracy vs cell size = the curve.
 import { renderTextToPngs } from '../../../dist/core/render.js';
-import { writeFileSync, mkdirSync } from 'node:fs';
-const OUT = '/tmp/sweep'; mkdirSync(OUT, { recursive: true });
+import { exclusiveWrite, privateTempDir } from '../../lib/io-safety.mjs';
+const OUT = privateTempDir('glyph-sweep');
 
 const PAGES = 4;
 // (cellWBonus, cellHBonus) -> cell = (5+wb) x (8+hb). prod is (0,0)=5x8.
@@ -49,9 +49,9 @@ for (const [k, wb, hb] of SIZES){
     // genuinely varies at the encoder (the whole point).
     const pngs = await renderTextToPngs(pageTexts[p], 72, {aa:true, cellWBonus:wb, cellHBonus:hb});
     if (pngs.length!==1) console.error(`WARN ${k}_${p}: ${pngs.length} pages`);
-    writeFileSync(`${OUT}/${k}_${p}.png`, pngs[0].png);
+    exclusiveWrite(`${OUT}/${k}_${p}.png`, pngs[0].png);
     if (p===0) console.log(`${k} cell=${5+wb}x${8+hb}px  page0=${pngs[0].width}x${pngs[0].height}px  img_tokens~${Math.round(pngs[0].width*pngs[0].height/750)}`);
   }
 }
-writeFileSync(`${OUT}/golds.json`, JSON.stringify(golds));
+exclusiveWrite(`${OUT}/golds.json`, JSON.stringify(golds));
 console.log(`done: ${SIZES.length} sizes x ${PAGES} pages`);

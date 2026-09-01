@@ -1,6 +1,6 @@
 # Migration to 0.6
 
-Version 0.6.3 keeps normal Work traffic on native Codex. It disables the
+Version 0.6.4 keeps normal Work traffic on native Codex. It disables the
 automatic Lean/app-server bridge and installs four low-latency hooks for a
 routine turn budget, RTK, receipts/evidence, and post-compaction guidance.
 It does not restore the retired API/provider proxy architecture.

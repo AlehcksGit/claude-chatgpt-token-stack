@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, existsSync, openSync, fstatSync, readSync, closeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import {
@@ -541,10 +541,12 @@ describe('reflow L0 contract – real corpus', () => {
         // blocks per file. Whole-file reads here blew the 30s budget on large
         // ~/.claude dirs. 8 MB is plenty for the per-file sample; a truncated
         // trailing line just fails JSON.parse below and is skipped.
-        const CAP_BYTES = 8 * 1024 * 1024;
-        const toRead = Math.min(statSync(filePath).size, CAP_BYTES);
         const fd = openSync(filePath, 'r');
         try {
+          const CAP_BYTES = 8 * 1024 * 1024;
+          const opened = fstatSync(fd);
+          if (!opened.isFile() || !Number.isSafeInteger(opened.size) || opened.size < 0) continue;
+          const toRead = Math.min(opened.size, CAP_BYTES);
           const buf = Buffer.allocUnsafe(toRead);
           const n = readSync(fd, buf, 0, toRead, 0);
           rawContent = buf.toString('utf-8', 0, n);

@@ -1,6 +1,6 @@
 # Native architecture
 
-> **0.6.3 supported runtime:** native Codex plus UserPromptSubmit, PreToolUse,
+> **0.6.4 supported runtime:** native Codex plus UserPromptSubmit, PreToolUse,
 > PostToolUse, and SessionStart. The launcher and app-server bridge are retained
 > only as disabled research code.
 
@@ -67,7 +67,7 @@ answers, credentials, and evidence content.
 ## Disabled whole-turn research
 
 The deterministic history compiler, Lean session runner, and app-server bridge
-remain for controlled research. Version 0.6.3 does not install or register the
+remain for controlled research. Version 0.6.4 does not install or register the
 bridge, does not set `CODEX_CLI_PATH`, and keeps `leanBridge.enabled` false. The
 path is excluded from normal local Work because its synchronous nested turn
 added unacceptable latency.

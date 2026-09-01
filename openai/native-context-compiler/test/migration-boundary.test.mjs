@@ -17,7 +17,7 @@ test('native stack contains no legacy API transport, agent loop, aliases, or scr
 
   const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, 'native-context-compiler');
-  assert.equal(packageJson.version, '0.6.3');
+  assert.equal(packageJson.version, '0.6.4');
   assert.equal(Object.hasOwn(packageJson.scripts, 'sidecar'), false);
   assert.equal(Object.hasOwn(packageJson.scripts, 'native-compiler'), true);
   assert.equal(packageJson.dependencies['@openai/codex'], '0.149.0');

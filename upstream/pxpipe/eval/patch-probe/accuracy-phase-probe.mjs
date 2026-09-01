@@ -11,7 +11,7 @@
 //   cols: multiple of 140, rows: multiple of 7.
 // NOTE: real inference — costs output tokens.
 
-import { writeFile } from 'node:fs/promises';
+import { boundedResponseText, exclusiveWrite, privateTempDir } from '../lib/io-safety.mjs';
 import { renderTextToPngs, PAD_X, PAD_Y, CELL_W, CELL_H } from '../../dist/core/render.js';
 
 const model = process.argv[2] ?? 'claude-fable-5';
@@ -83,9 +83,10 @@ const res = await fetch(`${BASE}/v1/messages`, {
     }],
   }),
 });
-const j = await res.json();
+const j = JSON.parse(await boundedResponseText(res, 16 * 1024 * 1024));
 if (!res.ok) { console.error('API error:', JSON.stringify(j)); process.exit(1); }
-await writeFile(`/tmp/phase-probe-${model}-${Date.now()}.json`, JSON.stringify({ model, cols: COLS, rows: ROWS, seedArg, padLines: PADL, grid, resp: j }, null, 2));
+const outputDir = privateTempDir('phase-probe');
+exclusiveWrite(`${outputDir}/result.json`, JSON.stringify({ model, cols: COLS, rows: ROWS, seedArg, padLines: PADL, grid, resp: j }, null, 2));
 const out = (j.content?.find(b => b.type === 'text')?.text ?? '')
   .replace(/```[a-z]*\n?/g, '').split('\n').map(l => l.trimEnd()).filter(l => l.length);
 console.error(`usage=${JSON.stringify(j.usage)} stop=${j.stop_reason} lines=${out.length}/${ROWS}`);

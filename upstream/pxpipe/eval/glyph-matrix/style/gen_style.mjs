@@ -8,8 +8,8 @@
 // SAME content across arms (only style changes), mirroring gen_sweep.mjs so the
 // grader and method carry over 1:1.
 import { renderTextToPngs } from '../../../dist/core/render.js';
-import { writeFileSync, mkdirSync } from 'node:fs';
-const OUT = '/tmp/style'; mkdirSync(OUT, { recursive: true });
+import { exclusiveWrite, privateTempDir } from '../../lib/io-safety.mjs';
+const OUT = privateTempDir('glyph-style');
 
 const PAGES = Number(process.env.PAGES || 4);
 
@@ -52,11 +52,11 @@ for (const [k, style] of STYLES){
   for (let p=0; p<PAGES; p++){
     const pngs = await renderTextToPngs(pageTexts[p], 72, { cellWBonus:0, cellHBonus:0, ...style });
     if (pngs.length!==1) console.error(`WARN ${k}_${p}: ${pngs.length} pages`);
-    writeFileSync(`${OUT}/${k}_${p}.png`, pngs[0].png);
+    exclusiveWrite(`${OUT}/${k}_${p}.png`, pngs[0].png);
     if (p===0) dims[k] = { w:pngs[0].width, h:pngs[0].height, tok: Math.round(pngs[0].width*pngs[0].height/750) };
   }
 }
-writeFileSync(`${OUT}/golds.json`, JSON.stringify(golds));
+exclusiveWrite(`${OUT}/golds.json`, JSON.stringify(golds));
 
 console.log('style    page0_dims     img_tokens   (all must match prod = constant cost)');
 const base = dims['prod'].tok;

@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SUPPORTED_PXPIPE_VERSION='0.13.2'
+PXPIPE_PATCHER_SHA256='f5f0b732dcc99b4c0b8aea64c31bddeac47fe32ee54a81215636e4c0966c9e46'
 OPENAI_DEFAULT_PORT='47831'
 QUIET=0
 
@@ -44,6 +45,7 @@ PROCESS_HELPER="$MANAGED_BIN/lib/unix-process.js"
 SUPERVISOR="$MANAGED_BIN/lib/token-stack-supervisor.sh"
 WARPD_TS="$MANAGED_BIN/lib/warpd/warpd.ts"
 MONITOR_JS="$MANAGED_BIN/lib/monitor.js"
+PXPIPE_PATCHER="$MANAGED_BIN/lib/pxpipe-runtime-patch.js"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -65,7 +67,7 @@ fi
 BASH_FOUND="$(command -v bash 2>/dev/null)" || { warn 'bash is required'; exit 1; }
 BASH_BIN="$("$NODE_BIN" -e 'const fs=require("fs"); let p=process.argv[1]; if(process.platform==="win32"&&!fs.existsSync(p)&&fs.existsSync(`${p}.exe`))p+=`.exe`; console.log(fs.realpathSync.native(p))' "$BASH_FOUND")"
 
-for required in "$LIFECYCLE" "$PROCESS_HELPER" "$SUPERVISOR"; do
+for required in "$LIFECYCLE" "$PROCESS_HELPER" "$SUPERVISOR" "$PXPIPE_PATCHER"; do
   [ -f "$required" ] && [ ! -L "$required" ] || { warn "managed runtime file is missing or linked: $required"; exit 2; }
 done
 
@@ -75,7 +77,7 @@ matches() {
 
 verify_core() {
   local id
-  for id in pxpipe-ctl unix-lifecycle unix-process supervisor; do
+  for id in pxpipe-ctl unix-lifecycle unix-process supervisor pxpipe-patcher; do
     matches "$id" || { warn "installed runtime no longer matches its receipt: $id"; return 2; }
   done
   "$NODE_BIN" "$PROCESS_HELPER" prepare --home "$TARGET_HOME" >/dev/null
@@ -126,6 +128,10 @@ pxpipe_cli() {
   [ "$name" = 'pxpipe-proxy' ] && [ "$version" = "$SUPPORTED_PXPIPE_VERSION" ] || {
     warn "pxpipe-proxy must be exactly $SUPPORTED_PXPIPE_VERSION (found ${version:-unknown})"; return 1;
   }
+  local patcher_hash
+  patcher_hash="$("$NODE_BIN" -e 'const fs=require("fs"),crypto=require("crypto");process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$PXPIPE_PATCHER")"
+  [ "$patcher_hash" = "$PXPIPE_PATCHER_SHA256" ] || { warn 'managed pxpipe runtime verifier hash is invalid'; return 2; }
+  "$NODE_BIN" "$PXPIPE_PATCHER" verify "$root/pxpipe-proxy" >/dev/null 2>&1 || { warn 'pxpipe runtime files or dependency tree do not match the reviewed hardened build'; return 2; }
   "$NODE_BIN" -e 'const fs=require("fs"); console.log(fs.realpathSync.native(process.argv[1]))' "$cli"
 }
 
@@ -297,7 +303,7 @@ start_role() {
 }
 
 stop_role() {
-  local role="$1" rc pid i verified_pid
+  local role="$1" rc pid i verified_pid identity_races
   set +e
   pid="$("$NODE_BIN" "$PROCESS_HELPER" verify-meta --home "$TARGET_HOME" --role "$role" --field supervisorPid 2>/dev/null)"
   rc=$?
@@ -320,6 +326,7 @@ stop_role() {
   [ "$verified_pid" = "$pid" ] || { warn "$role: PID changed before stop; no signal was sent"; return 2; }
   "$NODE_BIN" "$PROCESS_HELPER" signal-supervisor --home "$TARGET_HOME" --role "$role" --signal SIGTERM >/dev/null
   i=0
+  identity_races=0
   while [ "$i" -lt 80 ]; do
     set +e; meta_status_recorded "$role"; rc=$?; set -e
     if [ "$rc" -eq 3 ]; then
@@ -327,7 +334,15 @@ stop_role() {
       say "$role: stopped (verified launch only)"
       return 0
     fi
-    [ "$rc" -eq 2 ] && { warn "$role: identity changed while stopping; no further signal was sent"; return 2; }
+    if [ "$rc" -eq 2 ]; then
+      # Linux may expose a verified process in its final exit transition before
+      # the supervisor removes its receipt. Never send another signal; allow a
+      # few bounded polls for the already-signalled launch to finish cleanup.
+      identity_races=$((identity_races + 1))
+      [ "$identity_races" -lt 4 ] || { warn "$role: identity changed while stopping; no further signal was sent"; return 2; }
+    else
+      identity_races=0
+    fi
     sleep 0.25
     i=$((i + 1))
   done

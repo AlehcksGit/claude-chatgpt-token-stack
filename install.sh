@@ -7,6 +7,8 @@ umask 077
 
 SUPPORTED_RTK_VERSION='0.45.0'
 SUPPORTED_PXPIPE_VERSION='0.13.2'
+PXPIPE_PACKAGE_INTEGRITY='sha512-utMkpkWAjgQyldB62ebWrTFKhTmMKTiwXIktqbHxLixrtgw/g+r9/0nzG2Vz1prKSvH2Q7x9JNrG4LwEmlHQ+g=='
+PXPIPE_PATCHER_SHA256='f5f0b732dcc99b4c0b8aea64c31bddeac47fe32ee54a81215636e4c0966c9e46'
 PROFILE='default'
 SKIP_RTK=0
 SKIP_PXPIPE=0
@@ -65,6 +67,8 @@ fi
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 LIFECYCLE="$REPO/stack/bin/lib/unix-lifecycle.js"
 [ -f "$LIFECYCLE" ] && [ ! -L "$LIFECYCLE" ] || { echo "lifecycle helper is missing or linked: $LIFECYCLE" >&2; exit 2; }
+PXPIPE_PATCHER="$REPO/stack/bin/lib/pxpipe-runtime-patch.js"
+[ -f "$PXPIPE_PATCHER" ] && [ ! -L "$PXPIPE_PATCHER" ] || { echo "pxpipe runtime verifier is missing or linked: $PXPIPE_PATCHER" >&2; exit 2; }
 
 command -v node >/dev/null 2>&1 || { echo 'Node.js is required' >&2; exit 1; }
 NODE_BIN="$(node -e 'const fs=require("fs"); console.log(fs.realpathSync.native(process.execPath))')"
@@ -75,6 +79,8 @@ if ! { { [ "$node_major" -eq 22 ] && [ "$node_minor" -ge 7 ]; } || [ "$node_majo
   echo "unsupported Node.js $NODE_VERSION (supported: 22.7+ in the 22.x line, or 24.x)" >&2
   exit 1
 fi
+actual_patcher_hash="$("$NODE_BIN" -e 'const fs=require("fs"),crypto=require("crypto");process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$PXPIPE_PATCHER")"
+[ "$actual_patcher_hash" = "$PXPIPE_PATCHER_SHA256" ] || { echo 'pxpipe runtime verifier does not match the reviewed release' >&2; exit 2; }
 
 # Replacing the installed supervisor/helper while one of their recorded
 # processes is alive would invalidate the only safe stop identity.  Refuse any
@@ -121,6 +127,15 @@ fi
 
 PXPIPE_VERSION='skip'
 PXPIPE_INSTALLED='no'
+PXPIPE_RUNTIME_JSON='null'
+pxpipe_downloaded='no'
+PXPIPE_TEMP=''
+cleanup_pxpipe_temp() {
+  [ -n "$PXPIPE_TEMP" ] || return 0
+  "$NODE_BIN" -e 'const fs=require("fs"),path=require("path");const p=path.resolve(process.argv[1]),base=path.resolve(process.argv[2]);if(path.dirname(p)!==base||!/^claude-token-stack-pxpipe-[A-Za-z0-9]+$/.test(path.basename(p)))process.exit(2);fs.rmSync(p,{recursive:true,force:true})' "$PXPIPE_TEMP" "${TMPDIR:-/tmp}"
+  PXPIPE_TEMP=''
+}
+trap cleanup_pxpipe_temp EXIT
 pxpipe_package_state() {
   command -v npm >/dev/null 2>&1 || return 3
   local root package cli
@@ -128,39 +143,85 @@ pxpipe_package_state() {
   package="$root/pxpipe-proxy/package.json"; cli="$root/pxpipe-proxy/bin/cli.js"
   [ -e "$package" ] || return 3
   [ -f "$package" ] && [ ! -L "$package" ] && [ -f "$cli" ] && [ ! -L "$cli" ] || return 2
-  "$NODE_BIN" -e 'const p=require(process.argv[1]); if(p.name!=="pxpipe-proxy")process.exit(2); process.stdout.write(String(p.version||""))' "$package"
+  "$NODE_BIN" -e 'const fs=require("fs"),path=require("path"),p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(p.name!=="pxpipe-proxy")process.exit(2);process.stdout.write(`${String(p.version||"")}\t${path.dirname(process.argv[1])}\n`)' "$package"
+}
+
+install_reviewed_pxpipe() {
+  PXPIPE_TEMP="$(mktemp -d "${TMPDIR:-/tmp}/claude-token-stack-pxpipe-XXXXXXXX")"
+  [ -d "$PXPIPE_TEMP" ] && [ ! -L "$PXPIPE_TEMP" ] || { echo 'could not create a private pxpipe download directory' >&2; return 2; }
+  local clean_path metadata filename archive actual_integrity tar_bin list entry have_manifest
+  local -a clean_env
+  clean_path="$(dirname "$NODE_BIN"):$(dirname "$(command -v npm)"):/usr/local/bin:/usr/bin:/bin"
+  clean_env=(env -i "PATH=$clean_path" "HOME=${HOME:?HOME is not set}" 'LANG=C')
+  [ -n "${USER:-}" ] && clean_env+=("USER=$USER")
+  [ -n "${LOGNAME:-}" ] && clean_env+=("LOGNAME=$LOGNAME")
+  [ -n "${SYSTEMROOT:-}" ] && clean_env+=("SYSTEMROOT=$SYSTEMROOT")
+  [ -n "${WINDIR:-}" ] && clean_env+=("WINDIR=$WINDIR")
+  metadata="$PXPIPE_TEMP/pack.json"
+  "${clean_env[@]}" npm pack "pxpipe-proxy@$SUPPORTED_PXPIPE_VERSION" --ignore-scripts --json --pack-destination "$PXPIPE_TEMP" --registry=https://registry.npmjs.org/ >"$metadata"
+  filename="$("$NODE_BIN" - "$metadata" "$SUPPORTED_PXPIPE_VERSION" "$PXPIPE_PACKAGE_INTEGRITY" <<'JS'
+const fs=require('fs'),path=require('path');
+const items=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+if(!Array.isArray(items)||items.length!==1)process.exit(2);
+const item=items[0],filename=String(item.filename||'');
+if(item.name!=='pxpipe-proxy'||item.version!==process.argv[3]||item.integrity!==process.argv[4]||path.basename(filename)!==filename)process.exit(2);
+process.stdout.write(filename);
+JS
+)" || { echo 'npm returned a package that does not match the reviewed registry integrity' >&2; return 2; }
+  archive="$PXPIPE_TEMP/$filename"; [ -f "$archive" ] && [ ! -L "$archive" ] || { echo 'the reviewed pxpipe archive is missing or linked' >&2; return 2; }
+  actual_integrity="$("$NODE_BIN" -e 'const fs=require("fs"),crypto=require("crypto");process.stdout.write("sha512-"+crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$archive")"
+  [ "$actual_integrity" = "$PXPIPE_PACKAGE_INTEGRITY" ] || { echo 'the downloaded pxpipe archive failed SHA-512 verification' >&2; return 2; }
+  tar_bin="$(command -v tar)" || { echo 'tar is required to inspect the pxpipe archive' >&2; return 1; }
+  list="$PXPIPE_TEMP/entries.txt"; "$tar_bin" -tzf "$archive" >"$list"
+  have_manifest=0
+  while IFS= read -r entry; do
+    case "$entry" in package/package.json) have_manifest=1 ;; esac
+    case "$entry" in package|package/*) ;; *) echo "unsafe pxpipe archive entry: $entry" >&2; return 2 ;; esac
+    case "$entry" in *\\*|*:*|/*|../*|*/../*|*/..) echo "unsafe pxpipe archive entry: $entry" >&2; return 2 ;; esac
+  done <"$list"
+  [ "$have_manifest" -eq 1 ] || { echo 'the pxpipe archive has no package manifest' >&2; return 2; }
+  "${clean_env[@]}" npm install --global "$archive" --ignore-scripts --no-audit --no-fund --install-strategy=nested
+  cleanup_pxpipe_temp
 }
 
 if [ "$SKIP_PXPIPE" -eq 1 ]; then
   say 'pxpipe-proxy: skipped completely'
 else
   command -v npm >/dev/null 2>&1 || { echo 'npm is required for the pinned pxpipe-proxy package' >&2; exit 1; }
-  set +e; present_version="$(pxpipe_package_state)"; package_rc=$?; set -e
+  owned_before='no';set +e;dependency_json="$("$NODE_BIN" "$LIFECYCLE" dependency --home "$TARGET_HOME" --name pxpipe 2>/dev/null)";dependency_rc=$?;set -e
+  if [ "$dependency_rc" -eq 0 ]; then owned_before="$("$NODE_BIN" -e 'const d=JSON.parse(process.argv[1]);process.stdout.write(d.installedByThisInstaller===true?"yes":"no")' "$dependency_json")"; elif [ "$dependency_rc" -ne 3 ]; then echo 'the existing lifecycle receipt could not be verified' >&2; exit 2; fi
+  [ "$owned_before" = 'yes' ] && PXPIPE_INSTALLED='yes'
+  set +e; package_info="$(pxpipe_package_state)"; package_rc=$?; set -e
+  present_version='';package_root='';if [ "$package_rc" -eq 0 ]; then IFS=$'\t' read -r present_version package_root <<<"$package_info";fi
   if [ "$package_rc" -eq 2 ]; then
     echo 'the global pxpipe-proxy package path is linked, malformed, or has the wrong package identity; refusing to replace it' >&2
     exit 2
   elif [ "$package_rc" -eq 3 ]; then
+    [ "$owned_before" = 'no' ] || { echo 'installer-owned pxpipe is missing; preserving its receipt for review instead of silently replacing it' >&2; exit 2; }
     say "pxpipe-proxy: installing pinned package $SUPPORTED_PXPIPE_VERSION"
-    clean_path="$(dirname "$NODE_BIN"):$(dirname "$(command -v npm)"):/usr/local/bin:/usr/bin:/bin"
-    clean_env=(env -i "PATH=$clean_path" "HOME=${HOME:?HOME is not set}" 'LANG=C')
-    [ -n "${USER:-}" ] && clean_env+=("USER=$USER")
-    [ -n "${LOGNAME:-}" ] && clean_env+=("LOGNAME=$LOGNAME")
-    [ -n "${SYSTEMROOT:-}" ] && clean_env+=("SYSTEMROOT=$SYSTEMROOT")
-    [ -n "${WINDIR:-}" ] && clean_env+=("WINDIR=$WINDIR")
-    "${clean_env[@]}" npm install --global --ignore-scripts --no-audit --no-fund "pxpipe-proxy@$SUPPORTED_PXPIPE_VERSION"
+    install_reviewed_pxpipe
     PXPIPE_INSTALLED='yes'
-    set +e; present_version="$(pxpipe_package_state)"; package_rc=$?; set -e
+    pxpipe_downloaded='yes'
+    set +e; package_info="$(pxpipe_package_state)"; package_rc=$?; set -e
+    if [ "$package_rc" -eq 0 ]; then IFS=$'\t' read -r present_version package_root <<<"$package_info";fi
   fi
   [ "$package_rc" -eq 0 ] && [ "$present_version" = "$SUPPORTED_PXPIPE_VERSION" ] || {
     echo "pxpipe-proxy must be exactly $SUPPORTED_PXPIPE_VERSION (found ${present_version:-none}); refusing a mutable upgrade/downgrade" >&2
     exit 1
   }
+  set +e;PXPIPE_RUNTIME_JSON="$("$NODE_BIN" "$PXPIPE_PATCHER" verify "$package_root" 2>/dev/null)";runtime_rc=$?;set -e
+  if [ "$runtime_rc" -ne 0 ]; then
+    [ "$owned_before" = 'yes' ] || [ "$pxpipe_downloaded" = 'yes' ] || { echo 'pre-existing pxpipe lacks the reviewed runtime hardening; it was preserved' >&2; exit 2; }
+    [ "$pxpipe_downloaded" = 'yes' ] || { say 'pxpipe-proxy: replacing the legacy installer-owned package with the reviewed archive';install_reviewed_pxpipe;set +e;package_info="$(pxpipe_package_state)";package_rc=$?;set -e;[ "$package_rc" -eq 0 ] || exit 2;IFS=$'\t' read -r present_version package_root <<<"$package_info";PXPIPE_INSTALLED='yes';pxpipe_downloaded='yes'; }
+    PXPIPE_RUNTIME_JSON="$("$NODE_BIN" "$PXPIPE_PATCHER" apply "$package_root")"
+  fi
+  "$NODE_BIN" -e 'const r=JSON.parse(process.argv[1]);if(r.schemaVersion!==1||r.patchId!=="cts-pxpipe-0.13.2-security-1"||r.state!=="patched"||r.dependencyVerified!==true||!Array.isArray(r.files)||r.files.length!==10)process.exit(2)' "$PXPIPE_RUNTIME_JSON" || { echo 'pxpipe runtime hardening did not verify' >&2; exit 2; }
   PXPIPE_VERSION="$SUPPORTED_PXPIPE_VERSION"
-  say "pxpipe-proxy: verified $PXPIPE_VERSION"
+  say "pxpipe-proxy: verified and hardened $PXPIPE_VERSION"
 fi
 
 say "Installing receipt-backed rules/runtime into $TARGET_HOME"
-install_args=(install --home "$TARGET_HOME" --repo "$REPO" --profile "$PROFILE" --rtk-path "$RTK_PATH" --rtk-version "$RTK_VERSION" --pxpipe-version "$PXPIPE_VERSION" --pxpipe-installed "$PXPIPE_INSTALLED" --desktop unchanged --warp-url 'http://127.0.0.1:47822' --ca-path "$TARGET_HOME/.pxpipe/warp-ca.pem")
+install_args=(install --home "$TARGET_HOME" --repo "$REPO" --profile "$PROFILE" --rtk-path "$RTK_PATH" --rtk-version "$RTK_VERSION" --pxpipe-version "$PXPIPE_VERSION" --pxpipe-installed "$PXPIPE_INSTALLED" --pxpipe-runtime "$PXPIPE_RUNTIME_JSON" --desktop unchanged --warp-url 'http://127.0.0.1:47822' --ca-path "$TARGET_HOME/.pxpipe/warp-ca.pem")
 [ "$FORCE_LAUNCHERS" -eq 1 ] && install_args+=(--force-launchers)
 [ "$FORCE_SETTINGS" -eq 1 ] && install_args+=(--force-settings)
 "$NODE_BIN" "$LIFECYCLE" "${install_args[@]}"

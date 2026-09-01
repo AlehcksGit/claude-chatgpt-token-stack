@@ -4,6 +4,37 @@ All notable changes are documented here. This project uses semantic
 versioning for the integration layer; vendored projects keep their own
 versions and provenance.
 
+## 0.6.4 - 2026-08-31
+
+### Security and installation hardening
+
+- The Windows installer now fetches the exact reviewed pxpipe 0.13.2 archive,
+  verifies its official SHA-512 registry integrity and archive paths, disables
+  lifecycle scripts, installs dependencies in a deterministic nested layout,
+  and applies the reviewed runtime fixes before any proxy can start.
+- A managed verifier checks all unchanged pxpipe package files, every patched
+  runtime file, and all 1,348 files in gpt-tokenizer 3.4.0. Controllers refuse
+  to start if any reviewed byte or dependency changes. Legacy installer-owned
+  0.6.3 packages migrate through the same verified archive; unrelated global
+  packages remain untouched.
+- Linux and macOS use the same archive, dependency, patch, receipt, and startup
+  verification rules. Optional evaluation tools now use private temporary
+  files, bounded downloads, safe output destinations, and pinned vendor hashes.
+  Unix shutdown tolerates the brief process-exit transition after a verified
+  termination signal without ever signalling an unverified process.
+- Monitor, lifecycle, OAuth-token, and export-file reads now use stable file
+  descriptors with identity and size checks before and after each read. Their
+  Windows identity checks also handle Node.js 22 on Windows Server 2025, where
+  descriptor and path APIs can report different IDs for the same file.
+- Windows fresh-system setup continues to install and verify official Node.js
+  24.19.0 LTS plus npm when Node is absent. The user's fresh Windows x64 install
+  confirms the completed stack works after Node is available; the automatic
+  MSI/UAC path is covered by isolated orchestration tests rather than a second
+  physical-machine run.
+- Added full archive/runtime tamper tests and changed lifecycle tests to run the
+  real reviewed pxpipe package. See `docs/SECURITY-REVIEW-0.6.4.md` and
+  `docs/RELEASE-AUDIT-0.6.4.md` for scope and remaining limitations.
+
 ## 0.6.3 - 2026-08-31
 
 ### Installer and audit fixes

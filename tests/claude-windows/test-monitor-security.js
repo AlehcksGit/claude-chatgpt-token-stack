@@ -70,7 +70,7 @@ const fileHash = (value) => `file:${sha256(Buffer.from(value, "utf8"))}`;
 
   const localAppData = path.join(testRoot, "AppData", "Local");
   const nccRoot = path.join(localAppData, "NativeContextCompiler"); fs.mkdirSync(nccRoot, { recursive: true });
-  fs.writeFileSync(path.join(nccRoot, "install.json"), JSON.stringify({ product: "native-context-compiler", version: "0.6.3", mode: "native-hook-stack", migration: { legacyHooksRemoved: 2, legacyProviderRemoved: true, backup: sensitive }, secret: sensitive }));
+  fs.writeFileSync(path.join(nccRoot, "install.json"), JSON.stringify({ product: "native-context-compiler", version: "0.6.4", mode: "native-hook-stack", migration: { legacyHooksRemoved: 2, legacyProviderRemoved: true, backup: sensitive }, secret: sensitive }));
   fs.writeFileSync(path.join(nccRoot, "settings.json"), JSON.stringify({ enabled: true, surface: "chatgpt-work-local-only", preToolUse: { rtk: true }, postToolUse: { enabled: true }, turnBudget: { enabled: true, routineMaxWords: 180, progressMaxWords: 40 }, leanBridge: { enabled: false, profile: "workspace", nativePrefix: "!native" } }));
   fs.writeFileSync(path.join(nccRoot, "hook-metrics.jsonl"), [
     JSON.stringify({ at: new Date().toISOString(), kind: "rtk_rewrite", sessionId: "live-test-session", commandFingerprint: sensitive }),

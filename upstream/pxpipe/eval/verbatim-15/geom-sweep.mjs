@@ -1,6 +1,6 @@
 // Fixed-pitch 5x8 legibility sweep. Cell pitch NEVER changes: cols=312, wb=0, hb=0
 // -> 1568px, exactly the API long-edge bound (render.ts:162). Full density preserved.
-import { writeFileSync } from 'node:fs';
+import { exclusiveWrite, privateTempDir } from '../lib/io-safety.mjs';
 import { renderTextToPngs, renderCellWidth, renderCellHeight } from '../../dist/core/render.js';
 
 const TRIALS = [
@@ -23,6 +23,7 @@ function denseLog(trial, totalLines = 80) {
 
 const COLS = 312, MAXH = 1568;
 const manifest = [];
+const OUT = privateTempDir('geom-sweep');
 let n = 0;
 for (const aa of [false, true])
 for (const inkDilate of [0, 1])
@@ -35,15 +36,15 @@ for (const colorByClass of [false, true]) {
   for (const t of TRIALS) {
     const imgs = await renderTextToPngs(denseLog(t), COLS, style, MAXH);
     if (imgs.length !== 1) throw new Error(`${name}/${t.id}: ${imgs.length} pages`);
-    const p = `/tmp/geomsweep/${name}__${t.id}.png`;
-    writeFileSync(p, imgs[0].png);
+    const p = `${OUT}/${name}__${t.id}.png`;
+    exclusiveWrite(p, imgs[0].png);
     manifest.push({ variant:name, trial:t.id, gold:t.gold, dur:t.dur, path:p,
                     w:imgs[0].width, h:imgs[0].height, cellW:cw, cellH:ch,
                     aa, inkDilate, classTick, colorByClass });
   }
   n++;
 }
-writeFileSync('/tmp/geomsweep/manifest.json', JSON.stringify(manifest, null, 2));
+exclusiveWrite(`${OUT}/manifest.json`, JSON.stringify(manifest, null, 2));
 
 const pitches = [...new Set(manifest.map(m => `${m.cellW}x${m.cellH}`))];
 const dims    = [...new Set(manifest.map(m => `${m.w}x${m.h}`))];

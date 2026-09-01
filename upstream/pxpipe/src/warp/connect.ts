@@ -13,7 +13,7 @@
  *    absolute-form/CONNECT traffic a forward proxy handles.
  */
 
-import { Agent as HttpAgent, request as httpRequest } from 'node:http';
+import { Agent as HttpAgent, request as httpRequest, validateHeaderName, validateHeaderValue } from 'node:http';
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import {
   Agent as HttpsAgent,
@@ -84,11 +84,12 @@ function authority(host: string, port: string): string {
   return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
-function forwardHeaders(headers: IncomingHttpHeaders): Record<string, string | string[]> {
-  const out: Record<string, string | string[]> = Object.create(null);
+function forwardHeaders(headers: IncomingHttpHeaders): string[] {
+  const out: string[] = [];
   for (const [key, value] of Object.entries(headers)) {
     if (value === undefined || HOP_HEADERS.has(key.toLowerCase())) continue;
-    out[key] = value;
+    try { validateHeaderName(key); } catch { continue; }
+    for (const item of Array.isArray(value) ? value : [value]) out.push(key, String(item));
   }
   return out;
 }
@@ -202,7 +203,9 @@ export function createWarpHandlers(options: WarpHandlerOptions): WarpHandlers {
       const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
       for (const [key, value] of Object.entries(req.headers)) {
         for (const v of Array.isArray(value) ? value : [value]) {
-          if (v !== undefined) lines.push(`${key}: ${v}`);
+          if (v === undefined) continue;
+          try { validateHeaderName(key); validateHeaderValue(key, String(v)); } catch { continue; }
+          lines.push(`${key}: ${v}`);
         }
       }
       upstream.write(`${lines.join('\r\n')}\r\n\r\n`);

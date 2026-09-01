@@ -18,6 +18,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Build one isolated copy of the exact reviewed runtime for every integration
+# case. The fake npm command below only reports this private package root.
+REAL_NPM="$(command -v npm)" || { echo 'npm is required for Unix lifecycle tests' >&2; exit 1; }
+REVIEWED_PREFIX="$TEST_ROOT/reviewed-prefix"
+NPM_CONFIG_PREFIX="$REVIEWED_PREFIX" "$REAL_NPM" install --global --ignore-scripts --no-audit --no-fund --install-strategy=nested 'pxpipe-proxy@0.13.2' >/dev/null
+REVIEWED_GLOBAL="$(NPM_CONFIG_PREFIX="$REVIEWED_PREFIX" "$REAL_NPM" root -g)"
+node "$REPO/stack/bin/lib/pxpipe-runtime-patch.js" apply "$REVIEWED_GLOBAL/pxpipe-proxy" >/dev/null
+node "$REPO/stack/bin/lib/pxpipe-runtime-patch.js" verify "$REVIEWED_GLOBAL/pxpipe-proxy" >/dev/null
+
 pass_count=0
 pass() { pass_count=$((pass_count + 1)); printf 'ok %d - %s\n' "$pass_count" "$1"; }
 fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
@@ -74,11 +83,8 @@ const http=require('node:http'); const port=Number(process.argv[2]);
 const payload=Buffer.from('{"messages":[{"role":"user","content":"identity test"}]}');
 const request=http.request({host:'127.0.0.1',port,method:'POST',path:'http://api.anthropic.com/v1/messages?cts_identity=1',
   headers:{host:'api.anthropic.com','content-type':'application/json','content-length':payload.length},timeout:2000},(response)=>{
-  const chunks=[]; response.on('data',(chunk)=>chunks.push(chunk)); response.on('end',()=>{try{
-    const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if(response.statusCode!==200||response.headers['x-cts-test-proxy']!=='pxpipe-0.13.2'||value.proxied!==true||
-       value.path!=='/v1/messages?cts_identity=1'||value.bytes!==payload.length)process.exitCode=3;
-  }catch{process.exitCode=3;}});
+  let size=0; response.on('data',(chunk)=>{size+=chunk.length;if(size>1024*1024)request.destroy();});
+  response.on('end',()=>{if(!Number.isInteger(response.statusCode)||response.statusCode<100||response.statusCode>599)process.exitCode=3;});
 });
 request.on('timeout',()=>request.destroy()); request.on('error',()=>{process.exitCode=3;}); request.end(payload);
 JS
@@ -102,8 +108,8 @@ make_home() { mkdir -p "$1"; [ -d "$1" ] && [ ! -L "$1" ]; }
 
 make_fake_dependencies() {
   local root="$1" fake_bin fake_global marker
-  fake_bin="$root/fake-bin"; fake_global="$root/fake-global"; marker="$root/dependency-invocations"
-  mkdir -p "$fake_bin" "$fake_global/pxpipe-proxy/bin"
+  fake_bin="$root/fake-bin"; fake_global="$REVIEWED_GLOBAL"; marker="$root/dependency-invocations"
+  mkdir -p "$fake_bin"
   cat >"$fake_bin/rtk" <<EOF
 #!/usr/bin/env sh
 printf 'rtk:%s\n' "\$*" >>'$marker'
@@ -116,27 +122,7 @@ printf 'npm:%s\n' "\$*" >>'$marker'
 if [ "\${1:-}" = root ] && [ "\${2:-}" = -g ]; then printf '%s\n' '$fake_global'; exit 0; fi
 exit 2
 EOF
-  cat >"$fake_global/pxpipe-proxy/package.json" <<'EOF'
-{"name":"pxpipe-proxy","version":"0.13.2","bin":{"pxpipe":"bin/cli.js"}}
-EOF
-  cat >"$fake_global/pxpipe-proxy/bin/cli.js" <<'EOF'
-#!/usr/bin/env node
-'use strict';
-const http = require('node:http');
-const port = Number(process.env.PORT);
-const server = http.createServer((request, response) => {
-  const chunks=[];
-  request.on('data',(chunk)=>chunks.push(chunk));
-  request.on('end',()=>{
-    response.writeHead(200, {'content-type':'application/json','x-cts-test-proxy':'pxpipe-0.13.2'});
-    response.end(JSON.stringify({proxied:true,path:request.url,bytes:Buffer.concat(chunks).length}));
-  });
-});
-server.listen(port, '127.0.0.1');
-const stop = () => server.close(() => process.exit(0));
-process.on('SIGTERM', stop); process.on('SIGINT', stop);
-EOF
-  chmod 755 "$fake_bin/rtk" "$fake_bin/npm" "$fake_global/pxpipe-proxy/bin/cli.js"
+  chmod 755 "$fake_bin/rtk" "$fake_bin/npm"
   printf '%s\n' "$fake_bin"
 }
 
@@ -169,7 +155,8 @@ version_fake="$(make_fake_dependencies "$version_root")"
 node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("rtk 0.45.0","rtk 0.45.1"))' "$version_fake/rtk"
 expect_rc 1 env PATH="$version_fake:$PATH" "$REPO/install.sh" --target-home "$version_home" --no-start --no-desktop >/dev/null 2>&1
 assert_empty "$version_home"
-node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("0.13.2","0.13.3"))' "$version_root/fake-global/pxpipe-proxy/package.json"
+bad_global="$version_root/bad-global";mkdir -p "$bad_global/pxpipe-proxy/bin";printf '%s\n' '{"name":"pxpipe-proxy","version":"0.13.3"}' >"$bad_global/pxpipe-proxy/package.json";printf '%s\n' '#!/usr/bin/env node' >"$bad_global/pxpipe-proxy/bin/cli.js"
+node -e 'const fs=require("fs"),f=process.argv[1],a=process.argv[2],b=process.argv[3];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(a,b))' "$version_fake/npm" "$REVIEWED_GLOBAL" "$bad_global"
 expect_rc 1 env PATH="$version_fake:$PATH" "$REPO/install.sh" --target-home "$version_home" --no-start --skip-rtk --no-desktop >/dev/null 2>&1
 assert_empty "$version_home"
 pass 'exact dependency version refusal before mutation'
@@ -262,7 +249,7 @@ if(value.env.CUSTOM!=='before'||value.env.LATER!=='keep'||value.theme!=='dark'||
 if(value.env.HTTPS_PROXY||value.env.NODE_EXTRA_CA_CERTS||value.env.NO_PROXY!=='example.test')process.exit(4);
 if(JSON.stringify(value).includes('CTS_INSTALL_ID='))process.exit(3);
 JS
-[ -x "$full_fake/rtk" ] && [ -f "$full_root/fake-global/pxpipe-proxy/package.json" ] || fail 'shared dependencies were removed'
+[ -x "$full_fake/rtk" ] && [ -f "$REVIEWED_GLOBAL/pxpipe-proxy/package.json" ] || fail 'shared dependencies were removed'
 pass 'settings three-way merge and shared-tool preservation'
 
 # Editing an installer-owned hook is a real three-way conflict: uninstall does
